@@ -60,15 +60,17 @@ main = do
     --      bench "B" (nf (jackB n mean) rs),
           -- bench "B" (nf (jackB n mean) rs)
           --bench "A'" (nf (jackA2 n mean) rs)
-           bench "A'" (nf (jackA2 n mean) rs),
+           --bench "A'" (nf (jackA2 n mean) rs),
     --      bench "A" (nf (jackA mean) rs)
     --       bench "B" (nf (jackB n mean) rs)
     --     bench "Be2" (nf (jackBe2 mean) rs),
     --     bench "Be" (nf (jackBe n mean) rs)
  -- -}     
-            bench "C'" (nf (jackCparmap' mean) rs)
+            --bench "C'" (nf (jackCparmap' mean) rs)
             --bench "C" (nf (jackCparmap mean) rs),
             --bench "jackC" (nf (jackC mean) rs)
+            --bench "D" (nf (jackD mean) rs)
+            bench "DPar" (nf (jackDpar mean) rs)
          ]
 
 
@@ -101,6 +103,14 @@ jackCparmap f = cparmap f . resamples 500
 jackCparmap' :: (NFData b) => ([a] -> b) -> [a] -> [b]
 jackCparmap' f = cparmap' f . resamples 500
 
+jackD :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackD f = dmap f . resamples 500
+
+jackDpar :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackDpar f rs = MP.runPar $ do
+                    parMapM (return . f) (resamples 500 rs)
+
+
 
 amap :: (NFData b) => (a -> b) -> [a] -> [b] 
 amap f []     = []
@@ -127,12 +137,27 @@ cmap f (a:as) = (b:bs) `using` strat
         bs = cmap f as
         strat v = do rpar b; rseq bs; return v
 
-
 cparmap ::  (a -> b) -> [a] -> [b]
 cparmap f xs = map f xs `using` parList rseq
 
 cparmap' :: (NFData b) => (a -> b) -> [a] -> [b]
 cparmap' f xs = map f xs `using` parList rdeepseq
+
+dmap :: (NFData b) => (a -> b) -> [a] -> [b]
+dmap f []     = []
+dmap f (a:as) = MP.runPar $ do
+    i <- MP.new
+    j <- MP.new
+    MP.fork $ MP.put i (f a)
+    MP.fork $ MP.put j (dmap f as)
+    b <- MP.get i
+    bs <- MP.get j
+    return $ b:bs
+
+parMapM :: NFData b => (a -> MP.Par b) -> [a] -> MP.Par [b]
+parMapM f as = do
+    ibs <- mapM (MP.spawn . f) as
+    mapM MP.get ibs
 
 chunk :: Int -> [a] -> [[a]]
 chunk n [] = []
