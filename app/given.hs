@@ -58,13 +58,17 @@ main = do
     --      bench "jackknife" (nf (jackknife mean) rs),
         --  bench "A" (nf (jackA mean) rs)
     --      bench "B" (nf (jackB n mean) rs),
-          --bench "B" (nf (jackB n mean) rs)
-          bench "A'" (nf (jackA2 n mean) rs)
+          -- bench "B" (nf (jackB n mean) rs)
+          --bench "A'" (nf (jackA2 n mean) rs)
+           bench "A'" (nf (jackA2 n mean) rs),
     --      bench "A" (nf (jackA mean) rs)
     --       bench "B" (nf (jackB n mean) rs)
     --     bench "Be2" (nf (jackBe2 mean) rs),
     --     bench "Be" (nf (jackBe n mean) rs)
- -- -}
+ -- -}     
+            bench "C'" (nf (jackCparmap' mean) rs)
+            --bench "C" (nf (jackCparmap mean) rs),
+            --bench "jackC" (nf (jackC mean) rs)
          ]
 
 
@@ -88,7 +92,17 @@ jackBe n f = divideMap n (MP.runPar . MP.parMap (map f)) . resamples 500
 jackBe2 :: (NFData b) =>  ([a] -> b) -> [a] -> [b]
 jackBe2 f = MP.runPar . MP.parMap f . resamples 500
 
-amap :: (NFData b) => (a -> b) -> [] a -> [] b
+jackC :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackC f = cmap f . resamples 500
+
+jackCparmap :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackCparmap f = cparmap f . resamples 500
+
+jackCparmap' :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackCparmap' f = cparmap' f . resamples 500
+
+
+amap :: (NFData b) => (a -> b) -> [a] -> [b] 
 amap f []     = []
 amap f (a:as) = par b $ pseq bs (b:bs)
  where
@@ -105,6 +119,20 @@ bmap f (a:as) = do
               rseq b
               return (b:bs)
 
+cmap :: (NFData b) => (a -> b) -> [a] -> [b]
+cmap f []     = []
+cmap f (a:as) = (b:bs) `using` strat
+    where
+        b = force (f a)
+        bs = cmap f as
+        strat v = do rpar b; rseq bs; return v
+
+
+cparmap ::  (a -> b) -> [a] -> [b]
+cparmap f xs = map f xs `using` parList rseq
+
+cparmap' :: (NFData b) => (a -> b) -> [a] -> [b]
+cparmap' f xs = map f xs `using` parList rdeepseq
 
 chunk :: Int -> [a] -> [[a]]
 chunk n [] = []
