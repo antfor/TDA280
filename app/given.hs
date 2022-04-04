@@ -47,11 +47,12 @@ main = do
 singelmain args = do
   let n = read (head args) :: Int
   let (xs, ys) =
-        splitAt 1500 (take 6000 (randoms (mkStdGen 211570155)) :: [Float])
+        splitAt 1500 (take 200000 (randoms (mkStdGen 211570155)) :: [Float])
   -- handy (later) to give same input different parallel functions
   let rs = crud xs ++ ys
   putStrLn "B2"
-  print $ sum (jackA mean rs)
+  print $ length rs
+  print $ sum (mergeSort n   rs)
   putStrLn "Done"
 
 benchmain args = do
@@ -72,13 +73,13 @@ benchmain args = do
   print n
  -- print $ jackknife mean rs == jackB mean rs
   withArgs (drop 1 args) $ defaultMain [
--- {-
-    --      bench "jackknife" (nf (jackknife mean) rs),
-{-
+
+--          bench "jackknife" (nf (jackknife mean) rs)
+ {-
           bench "A" (nf (jackA mean) rs),
           bench "ADiv" (nf (jackADiv 4 mean) rs),
           bench "AChunk" (nf (jackAChunk n mean) rs)
--}
+ -}
           {-
           bench "B" (nf (jackB mean) rs),
           bench "BDiv" (nf (jackBDiv 4 mean) rs),
@@ -91,24 +92,19 @@ benchmain args = do
           bench "BeChunk" (nf (jackBeChunk n mean) rs)
           -}
 
-          
+          {-
           bench "C" (nf (jackC mean) rs),
           bench "CDiv" (nf (jackCDiv 4 mean) rs),
           bench "CChunk" (nf (jackCChunk n mean) rs)
-
+          -}
 
         {-
         bench "D" (nf (jackD mean) rs),
         bench "DDiv" (nf (jackDDiv 4 mean) rs),
         bench "DChunk" (nf (jackDChunk n mean) rs)
         -}
+        bench "msort" (nf (mergeSort n) rs)
 
- -- -}
-            --bench "C'" (nf (jackCparmap' mean) rs)
-            --bench "C" (nf (jackCparmap mean) rs),
-            --bench "jackC" (nf (jackC mean) rs)
-            --bench "D" (nf (jackD mean) rs)
-            --bench "DPar" (nf (jackDpar mean) rs)
                                                                           ]
 
 
@@ -211,12 +207,46 @@ divideMap :: (NFData b) => Int -> ([[a]] -> [[b]]) -> [a] -> [b]
 divideMap n mapF = concat . mapF . divide n
 
 -- 2 ------------------------------------------------------------
-{-
-divConq :: (a -> b) -> a -> (a -> Maybe [a]) -> ([b] -> b) -> b
-divConq f arg divide combine | isJust newArg = combine $ map f (devide arg)
-                             | otherwise     = undefined
+
+--divConq :: (a -> b) -> a -> (a -> [a]) -> ([b] -> b) -> b
+--divConq f arg divide combine  = combine $ map f (devide arg)
+
+
+divConq :: (NFData b) => (a -> b) -> a -> (a -> Bool) -> (a -> Maybe [a]) -> ([b] -> b) -> b
+divConq f arg threshold divide combine  = go arg
     where
-        newArg = devide arg
+        go arg =
+            case divide arg of
+                Nothing -> f arg
+                Just xs -> combine $ mapF go xs
+
+                where mapF | threshold arg = map
+                           | otherwise     = map
 
 
--}
+
+sortL :: (Ord a) => [a] -> [a] -> [a]
+sortL [] yl = yl
+sortL xl [] = xl
+sortL (x:xs) (y:ys) | x <= y = x : sortL xs (y:ys)
+                   | otherwise = y : sortL (x:xs) ys
+
+mergeSort :: (Ord a,NFData a) => Int -> [a] -> [a]
+mergeSort d xs = divConq f xs threshold divide combine
+    where
+        f :: Ord a => [a] -> [a]
+        f x = x
+
+        threshold :: [a] -> Bool
+        threshold x = length x < d
+
+        divide xs = case splitAt (div (length xs) 2) xs of
+                        ([],l) -> Nothing
+                        (l,[]) -> Nothing
+                        (l1,l2) -> Just [l1,l2]
+
+        combine :: Ord a => [[a]] -> [a]
+        combine [[], ys] = ys
+        combine [xs, []] = xs
+        combine [x:xs, y:ys] | x <= y    = x : combine [xs, y:ys]
+                             | otherwise = y : combine [x:xs, ys]
