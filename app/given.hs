@@ -73,11 +73,35 @@ benchmain args = do
  -- print $ jackknife mean rs == jackB mean rs
   withArgs (drop 1 args) $ defaultMain [
 -- {-
-          bench "jackknife" (nf (jackknife mean) rs),
-          
+    --      bench "jackknife" (nf (jackknife mean) rs),
+{-
           bench "A" (nf (jackA mean) rs),
           bench "ADiv" (nf (jackADiv 4 mean) rs),
           bench "AChunk" (nf (jackAChunk n mean) rs)
+-}
+          {-
+          bench "B" (nf (jackB mean) rs),
+          bench "BDiv" (nf (jackBDiv 4 mean) rs),
+          bench "BChunk" (nf (jackBChunk n mean) rs)
+          -}
+
+          {-
+          bench "Be" (nf (jackBe mean) rs),
+          bench "BeDiv" (nf (jackBeDiv 4 mean) rs),
+          bench "BeChunk" (nf (jackBeChunk n mean) rs)
+          -}
+
+          
+          bench "C" (nf (jackC mean) rs),
+          bench "CDiv" (nf (jackCDiv 4 mean) rs),
+          bench "CChunk" (nf (jackCChunk n mean) rs)
+
+
+        {-
+        bench "D" (nf (jackD mean) rs),
+        bench "DDiv" (nf (jackDDiv 4 mean) rs),
+        bench "DChunk" (nf (jackDChunk n mean) rs)
+        -}
 
  -- -}
             --bench "C'" (nf (jackCparmap' mean) rs)
