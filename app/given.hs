@@ -64,46 +64,63 @@ benchmain args = do
   -- handy (later) to give same input different parallel functions
 
   let rs = crud xs ++ ys
-  putStrLn $ "sample mean:    " ++ show (mean rs)
+--  putStrLn $ "sample mean:    " ++ show (mean rs)
 
-  let j = jackknife mean rs :: [Float]
-  putStrLn $ "jack mean min:  " ++ show (minimum j)
-  putStrLn $ "jack mean max:  " ++ show (maximum j)
+  --let j = jackknife mean rs :: [Float]
+  --putStrLn $ "jack mean min:  " ++ show (minimum j)
+  --putStrLn $ "jack mean max:  " ++ show (maximum j)
   print $ sum rs
   print n
+  let ls = [1..200000] ++ [0]
+  print $ sum ls
  -- print $ jackknife mean rs == jackB mean rs
   withArgs (drop 1 args) $ defaultMain [
 
---          bench "jackknife" (nf (jackknife mean) rs)
+--         bench "jackknife" (nf (jackknife mean) rs),
+    --    bench "jackknife" (nf (jackknife mean) rs)
+--    bench "A" (nf (jackA mean) rs),
+--    bench "A" (nf (jackA mean) rs)
  {-
-          bench "A" (nf (jackA mean) rs),
-          bench "ADiv" (nf (jackADiv 4 mean) rs),
-          bench "AChunk" (nf (jackAChunk n mean) rs)
- -}
+    --      bench "A" (nf (jackA mean) rs),
+    --      bench "ADiv" (nf (jackADiv 4 mean) rs),
+    --      bench "AChunk" (nf (jackAChunk n mean) rs),
+    --      bench "AChunk" (nf (jackAChunk n mean) rs)
+  -}
+--    bench "BChunk" (nf (jackBChunk n mean) rs),
+--    bench "B" (nf (jackB mean) rs)
           {-
-          bench "B" (nf (jackB mean) rs),
-          bench "BDiv" (nf (jackBDiv 4 mean) rs),
+--          bench "B" (nf (jackB mean) rs),
+--         bench "BDiv" (nf (jackBDiv 4 mean) rs),
+          bench "BChunk" (nf (jackBChunk n mean) rs),
           bench "BChunk" (nf (jackBChunk n mean) rs)
-          -}
+    --      -}
 
+    --      bench "BeChunk" (nf (jackBeChunk n mean) rs),
+    --      bench "Be" (nf (jackBe mean) rs)
           {-
           bench "Be" (nf (jackBe mean) rs),
           bench "BeDiv" (nf (jackBeDiv 4 mean) rs),
           bench "BeChunk" (nf (jackBeChunk n mean) rs)
           -}
-
-          {-
-          bench "C" (nf (jackC mean) rs),
-          bench "CDiv" (nf (jackCDiv 4 mean) rs),
-          bench "CChunk" (nf (jackCChunk n mean) rs)
-          -}
-
+    --      bench "CChunk" (nf (jackCChunk n mean) rs),
+    --      bench "C" (nf (jackC mean) rs)
+    --      {-
+    --      bench "C" (nf (jackC mean) rs),
+    --      bench "CDiv" (nf (jackCDiv 4 mean) rs),
+    --      bench "CChunk" (nf (jackCChunk n mean) rs),
+    --      bench "CChunk" (nf (jackCChunk n mean) rs)
+    --      -}
+    --    bench "DChunk" (nf (jackDChunk n mean) rs),
+    --    bench "D" (nf (jackD mean) rs)
         {-
-        bench "D" (nf (jackD mean) rs),
-        bench "DDiv" (nf (jackDDiv 4 mean) rs),
+    --    bench "D" (nf (jackD mean) rs),
+    --    bench "D" (nf (jackD mean) rs)
+    --    bench "DDiv" (nf (jackDDiv 4 mean) rs),
+        bench "DChunk" (nf (jackDChunk n mean) rs),
         bench "DChunk" (nf (jackDChunk n mean) rs)
         -}
-        bench "msort" (nf (mergeSort n) rs)
+    --    bench "msort" (nf (mergeSort n) rs)
+        bench "search" (nf (search n 0) ls)
 
                                                                           ]
 
@@ -250,3 +267,22 @@ mergeSort d xs = divConq f xs threshold divide combine
         combine [xs, []] = xs
         combine [x:xs, y:ys] | x <= y    = x : combine [xs, y:ys]
                              | otherwise = y : combine [x:xs, ys]
+
+
+search :: (Eq a, NFData a) =>  Int -> a -> [a] -> Bool
+search d i xs = divConq f xs threshold divide combine
+    where
+        --f :: Eq a => [a] -> Bool
+        f = elem i
+
+        combine :: [Bool] -> Bool
+        combine = or
+
+        threshold :: [a] -> Bool
+        threshold x = length x < d
+
+        divide :: Eq a => [a] -> Maybe [ [a] ]
+        divide xs = case splitAt (div (length xs) 2) xs of
+                        ([],l) -> Nothing
+                        (l,[]) -> Nothing
+                        (l1,l2) -> Just [l1,l2]
