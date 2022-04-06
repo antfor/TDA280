@@ -40,11 +40,44 @@ main = do
   mapM_ putStrLn args
   let fun = head args
   case fun of
+    "bjk" -> benchjk (tail args) 
     "b" -> benchmain (tail args)
     "s" -> singelmain (tail args)
     _   -> benchmain args
 
-singelmain args = do
+benchjk args = do
+  let (xs, ys) =
+        splitAt 1500 (take 6000 (randoms (mkStdGen 211570155)) :: [Float])
+  let rs = crud xs ++ ys
+
+  let n = read (head args) :: Int
+  let args' = tail args
+
+  let ndiv = length rs `div` n
+
+  let benchA = [bench "A" (nf (jackA mean) rs),
+                bench "ADiv" (nf (jackADiv ndiv mean) rs),
+                bench "AChunk" (nf (jackAChunk n mean) rs)]
+  let benchB = [bench "B" (nf (jackB mean) rs),
+                bench "BDiv" (nf (jackBDiv ndiv mean) rs),
+                bench "BChunk" (nf (jackBChunk n mean) rs)]
+  let benchC = [bench "C" (nf (jackC mean) rs),
+                bench "CDiv" (nf (jackCDiv ndiv mean) rs),
+                bench "CChunk" (nf (jackCChunk n mean) rs)]
+  let benchD = [bench "D" (nf (jackD mean) rs),
+                bench "DDiv" (nf (jackDDiv ndiv mean) rs),
+                bench "DChunk" (nf (jackDChunk n mean) rs)]
+  
+  let (args'', bench) = case head args' of 
+                "a" -> (tail args', benchA)
+                "b" -> (tail args', benchB)
+                "c" -> (tail args', benchC)
+                "d" -> (tail args', benchD)
+                "_" -> (args, concat [benchA, benchB, benchC, benchD])
+
+  withArgs args'' $ defaultMain bench
+
+{-singelmain args = do
   let n = read (head args) :: Int
   let (xs, ys) =
         splitAt 1500 (take 200000 (randoms (mkStdGen 211570155)) :: [Float])
@@ -53,6 +86,16 @@ singelmain args = do
   putStrLn "B2"
   print $ length rs
   print $ sum (mergeSort n   rs)
+  putStrLn "Done"-}
+
+singelmain args = do
+  let n = read (head args) :: Int
+  let (xs, ys) =
+        splitAt 1500 (take 200000 (randoms (mkStdGen 211570155)) :: [Float])
+  -- handy (later) to give same input different parallel functions
+  let rs = crud xs ++ ys
+  putStrLn "CMapBuffer"
+  force $ cmapbuffer 
   putStrLn "Done"
 
 benchmain args = do
@@ -60,17 +103,17 @@ benchmain args = do
   let n = read (head args) :: Int
 
   let (xs, ys) =
-        splitAt 1500 (take 6000 (randoms (mkStdGen 211570155)) :: [Float])
+        splitAt 1500 (take 600000 (randoms (mkStdGen 211570155)) :: [Float])
   -- handy (later) to give same input different parallel functions
 
   let rs = crud xs ++ ys
-  putStrLn $ "sample mean:    " ++ show (mean rs)
+  --putStrLn $ "sample mean:    " ++ show (mean rs)
 
-  let j = jackknife mean rs :: [Float]
-  putStrLn $ "jack mean min:  " ++ show (minimum j)
-  putStrLn $ "jack mean max:  " ++ show (maximum j)
-  print $ sum rs
-  print n
+  --let j = jackknife mean rs :: [Float]
+  --putStrLn $ "jack mean min:  " ++ show (minimum j)
+  --putStrLn $ "jack mean max:  " ++ show (maximum j)
+  --print $ sum rs
+  --print n
  -- print $ jackknife mean rs == jackB mean rs
   withArgs (drop 1 args) $ defaultMain [
 
@@ -221,7 +264,7 @@ divConq f arg threshold divide combine  = go arg
                 Just xs -> combine $ mapF go xs
 
                 where mapF | threshold arg = map
-                           | otherwise     = map
+                           | otherwise     = dmap
 
 
 
@@ -250,3 +293,11 @@ mergeSort d xs = divConq f xs threshold divide combine
         combine [xs, []] = xs
         combine [x:xs, y:ys] | x <= y    = x : combine [xs, y:ys]
                              | otherwise = y : combine [x:xs, ys]
+
+
+-- 3 -----------------------------------------------------------------------------
+cmapbuffer :: (NFData b) => (a -> b) -> [a] -> [b]
+cmap f xs = map f xs `using` parBuffer 100 rdeepseq
+
+jackCBuffer :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackCBuffer f = cmapbuffer f . resamples 500
