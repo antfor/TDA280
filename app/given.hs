@@ -38,55 +38,7 @@ crud = zipWith (\x a -> sin (x / 300) ** 2 + a) [0 ..]
 main = do
   args <- getArgs
   mapM_ putStrLn args
-  let fun = head args
-  case fun of
-    "bjk" -> benchjk (tail args) 
-    "b" -> benchmain (tail args)
-    "s" -> singelmain (tail args)
-    _   -> benchmain args
-
-benchjk args = do
-  let (xs, ys) =
-        splitAt 1500 (take 6000 (randoms (mkStdGen 211570155)) :: [Float])
-  let rs = crud xs ++ ys
-
-  let n = read (head args) :: Int
-  let args' = tail args
-
-  let ndiv = length rs `div` n
-
-  let benchA = [bench "A" (nf (jackA mean) rs),
-                bench "ADiv" (nf (jackADiv ndiv mean) rs),
-                bench "AChunk" (nf (jackAChunk n mean) rs)]
-  let benchB = [bench "B" (nf (jackB mean) rs),
-                bench "BDiv" (nf (jackBDiv ndiv mean) rs),
-                bench "BChunk" (nf (jackBChunk n mean) rs)]
-  let benchC = [bench "C" (nf (jackC mean) rs),
-                bench "CDiv" (nf (jackCDiv ndiv mean) rs),
-                bench "CChunk" (nf (jackCChunk n mean) rs)]
-  let benchD = [bench "D" (nf (jackD mean) rs),
-                bench "DDiv" (nf (jackDDiv ndiv mean) rs),
-                bench "DChunk" (nf (jackDChunk n mean) rs)]
-  
-  let (args'', bench) = case head args' of 
-                "a" -> (tail args', benchA)
-                "b" -> (tail args', benchB)
-                "c" -> (tail args', benchC)
-                "d" -> (tail args', benchD)
-                "_" -> (args, concat [benchA, benchB, benchC, benchD])
-
-  withArgs args'' $ defaultMain bench
-
-{-singelmain args = do
-  let n = read (head args) :: Int
-  let (xs, ys) =
-        splitAt 1500 (take 200000 (randoms (mkStdGen 211570155)) :: [Float])
-  -- handy (later) to give same input different parallel functions
-  let rs = crud xs ++ ys
-  putStrLn "B2"
-  print $ length rs
-  print $ sum (mergeSort n   rs)
-  putStrLn "Done"-}
+  singelmain (tail args)
 
 singelmain args = do
   let n = read (head args) :: Int
@@ -95,61 +47,10 @@ singelmain args = do
   -- handy (later) to give same input different parallel functions
   let rs = crud xs ++ ys
   putStrLn "CMapBuffer"
-  print $ sum $ jackCBuffer mean rs
+  --print $ sum $ jackCBuffer mean rs
+  --print $ sum $ jackCBuffer' 150 mean rs
+  print $ sum $ jackC mean rs
   putStrLn "Done"
-
-benchmain args = do
-
-  let n = read (head args) :: Int
-
-  let (xs, ys) =
-        splitAt 1500 (take 600000 (randoms (mkStdGen 211570155)) :: [Float])
-  -- handy (later) to give same input different parallel functions
-
-  let rs = crud xs ++ ys
-  --putStrLn $ "sample mean:    " ++ show (mean rs)
-
-  --let j = jackknife mean rs :: [Float]
-  --putStrLn $ "jack mean min:  " ++ show (minimum j)
-  --putStrLn $ "jack mean max:  " ++ show (maximum j)
-  --print $ sum rs
-  --print n
- -- print $ jackknife mean rs == jackB mean rs
-  withArgs (drop 1 args) $ defaultMain [
-
---          bench "jackknife" (nf (jackknife mean) rs)
- {-
-          bench "A" (nf (jackA mean) rs),
-          bench "ADiv" (nf (jackADiv 4 mean) rs),
-          bench "AChunk" (nf (jackAChunk n mean) rs)
- -}
-          {-
-          bench "B" (nf (jackB mean) rs),
-          bench "BDiv" (nf (jackBDiv 4 mean) rs),
-          bench "BChunk" (nf (jackBChunk n mean) rs)
-          -}
-
-          {-
-          bench "Be" (nf (jackBe mean) rs),
-          bench "BeDiv" (nf (jackBeDiv 4 mean) rs),
-          bench "BeChunk" (nf (jackBeChunk n mean) rs)
-          -}
-
-          {-
-          bench "C" (nf (jackC mean) rs),
-          bench "CDiv" (nf (jackCDiv 4 mean) rs),
-          bench "CChunk" (nf (jackCChunk n mean) rs)
-          -}
-
-        {-
-        bench "D" (nf (jackD mean) rs),
-        bench "DDiv" (nf (jackDDiv 4 mean) rs),
-        bench "DChunk" (nf (jackDChunk n mean) rs)
-        -}
-        bench "msort" (nf (mergeSort n) rs)
-
-                                                                          ]
-
 
 
 --A
@@ -304,3 +205,6 @@ cmapbuffer f = withStrategy (parBuffer 100 rdeepseq) . map f
 
 jackCBuffer :: (NFData b) => ([a] -> b) -> [a] -> [b]
 jackCBuffer f = cmapbuffer f . resamples 500
+
+jackCBuffer' :: (NFData b) => Int -> ([a] -> b) -> [a] -> [b]
+jackCBuffer' n f = chunkMap n (cmap (cmapbuffer f)) . resamples 500
