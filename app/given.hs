@@ -71,7 +71,7 @@ benchmain args = do
   --putStrLn $ "jack mean max:  " ++ show (maximum j)
   print $ sum rs
   print n
-  let ls = [1..200000] ++ [0]
+  let ls = replicate 100000 1 ++ [0] :: [Int]
   print $ sum ls
  -- print $ jackknife mean rs == jackB mean rs
   withArgs (drop 1 args) $ defaultMain [
