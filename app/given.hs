@@ -91,11 +91,11 @@ benchjk args = do
 singelmain args = do
   let n = read (head args) :: Int
   let (xs, ys) =
-        splitAt 1500 (take 200000 (randoms (mkStdGen 211570155)) :: [Float])
+        splitAt 1500 (take 6000 (randoms (mkStdGen 211570155)) :: [Float])
   -- handy (later) to give same input different parallel functions
   let rs = crud xs ++ ys
   putStrLn "CMapBuffer"
-  force $ cmapbuffer 
+  print $ sum $ jackCBuffer mean rs
   putStrLn "Done"
 
 benchmain args = do
@@ -296,8 +296,11 @@ mergeSort d xs = divConq f xs threshold divide combine
 
 
 -- 3 -----------------------------------------------------------------------------
+--cmapbuffer :: (NFData b) => (a -> b) -> [a] -> [b]
+--cmapbuffer f xs = map f xs `using` parBuffer 100 rdeepseq
+
 cmapbuffer :: (NFData b) => (a -> b) -> [a] -> [b]
-cmap f xs = map f xs `using` parBuffer 100 rdeepseq
+cmapbuffer f = withStrategy (parBuffer 100 rdeepseq) . map f
 
 jackCBuffer :: (NFData b) => ([a] -> b) -> [a] -> [b]
 jackCBuffer f = cmapbuffer f . resamples 500

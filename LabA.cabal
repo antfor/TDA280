@@ -42,7 +42,7 @@ executable LabA-exe
     Paths_LabA
   hs-source-dirs:
     app
-  ghc-options: -threaded -rtsopts -O2 -feager-blackholing
+  ghc-options: -threaded -rtsopts -O2 -feager-blackholing -eventlog
   build-depends:
       base >=4.7 && <5
     , random
