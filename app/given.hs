@@ -82,14 +82,14 @@ benchmain1 args = do
 benchmain2 args = do
   let n = read (head args) :: Int
 
-  let xs = take 60000 (randoms (mkStdGen 211570155)) :: [Int]
+  let xs = take 200000 (randoms (mkStdGen 211570155)) :: [Int]
   
-  let i = 426423478
-  let ys = take 3000 xs ++ [i] ++ drop 3001 xs
+  let i = 1
+  let ys = xs ++ [1]
 
   withArgs (drop 1 args) $ defaultMain [
-    bench "MergeSort" (nf (mergeSort False n) xs),
-    bench "MergeSortPar" (nf (mergeSort True n) xs),
+    --bench "MergeSort" (nf (mergeSort False n) xs),
+    --bench "MergeSortPar" (nf (mergeSort True n) xs),
     bench "Search" (nf (search False n i) ys),
     bench "SearchPar" (nf (search True n i) ys)
     ]
@@ -149,7 +149,6 @@ bmap f (a : as) = runEval $ do
   rseq b
   return (b : bs)
 
-
 cmap :: (NFData b) => (a -> b) -> [a] -> [b]
 cmap f xs = map f xs `using` parList rdeepseq
 
@@ -190,10 +189,8 @@ mergeSort :: (Ord a,NFData a) => Bool -> Int -> [a] -> [a]
 mergeSort usePar d xs = if usePar then divConqPar f xs threshold divide combine
                         else divConq f xs divide combine
     where
-        f :: Ord a => [a] -> [a]
         f = id
 
-        threshold :: [a] -> Bool
         threshold x = length x < d
 
         divide xs = case splitAt (div (length xs) 2) xs of
@@ -201,7 +198,6 @@ mergeSort usePar d xs = if usePar then divConqPar f xs threshold divide combine
                         (l,[]) -> Nothing
                         (l1,l2) -> Just [l1,l2]
 
-        combine :: Ord a => [[a]] -> [a]
         combine [[], ys] = ys
         combine [xs, []] = xs
         combine [x:xs, y:ys] | x <= y    = x : combine [xs, y:ys]
@@ -212,16 +208,12 @@ search :: (Eq a, NFData a) => Bool -> Int -> a -> [a] -> Bool
 search usePar d i xs = if usePar then divConqPar f xs threshold divide combine
                        else divConq f xs divide combine
     where
-        --f :: (Eq a, NFData a) => [a] -> Bool
         f = elem i
 
-        combine :: [Bool] -> Bool
         combine = or
 
-        threshold :: [a] -> Bool
         threshold x = length x < d
-
-        divide :: Eq a => [a] -> Maybe [ [a] ]
+        
         divide xs = case splitAt (div (length xs) 2) xs of
                         ([],l) -> Nothing
                         (l,[]) -> Nothing
