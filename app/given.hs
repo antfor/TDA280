@@ -34,7 +34,7 @@ crud = zipWith (\x a -> sin (x / 300) ** 2 + a) [0 ..]
 main :: IO ()
 main = do
   args <- getArgs
-  mapM_ putStrLn args
+
   let fun = head args
   case fun of
     "b1" -> benchmain1 (tail args)
@@ -55,7 +55,6 @@ benchmain1 args = do
   let j = jackknife mean rs :: [Float]
   putStrLn $ "jack mean min:  " ++ show (minimum j)
   putStrLn $ "jack mean max:  " ++ show (maximum j)
-  print $ sum rs
 
   withArgs (drop 1 args) $ defaultMain [
     bench "jackknife" (nf (jackknife mean) rs),
@@ -141,7 +140,7 @@ amap f (a : as) = par b $ pseq bs (b : bs)
 bmap :: (NFData b) => (a -> b) -> [a] -> [b]
 bmap f []       =  []
 bmap f (a : as) = runEval $ do
-  b  <- rpar $ force (f a)
+  b  <- rpar $ force $ f a
   let bs = bmap f as
   rseq bs
   rseq b
