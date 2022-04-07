@@ -220,3 +220,19 @@ search usePar d i xs = if usePar then divConqPar f xs threshold divide combine
                         (l1,l2) -> Just [l1,l2]
 
 -- 3 ------------------------------------------------------------
+cmapbuffer :: (NFData b) => (a -> b) -> [a] -> [b]
+cmapbuffer f = withStrategy (parBuffer 100 rdeepseq) . map f
+
+jackCBuffer :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackCBuffer f = cmapbuffer f . resamples 500
+
+jackCBuffer' :: (NFData b) => Int -> ([a] -> b) -> [a] -> [b]
+jackCBuffer' n f = chunkMap n (cmap (cmapbuffer f)) . resamples 500
+
+jackParList :: (NFData b) => ([a] -> b) -> [a] -> [b]
+jackParList f = cmap f . resamples 500
+
+jackLisChunk :: (NFData b) => Int -> ([a] -> b) -> [a] -> [b]
+jackLisChunk n f = cmapChunk f . resamples 500
+    where
+        cmapChunk f xs = map f xs using parListChunk n rdeepseq
