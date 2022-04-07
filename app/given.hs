@@ -42,7 +42,7 @@ main = do
     _   -> putStrLn "Bad arg"
 
 -- Benchmarks jackknife related functions
-benchmain1 :: IO ()
+benchmain1 :: [String] -> IO ()
 benchmain1 args = do
   let n = read (head args) :: Int
 
@@ -72,7 +72,7 @@ benchmain1 args = do
     ]
 
 -- Benchmarks DivConq related functions
-benchmain2 :: IO ()
+benchmain2 :: [String] -> IO ()
 benchmain2 args = do
   let n = read (head args) :: Int
 
