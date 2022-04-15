@@ -83,7 +83,7 @@ fill(M) ->
 %% not to be
 
 refine(M) ->
-    NewM =
+    NewM =                                                                 %todo
 	refine_rows(
 	  transpose(
 	    refine_rows(
@@ -97,7 +97,7 @@ refine(M) ->
 	    refine(NewM)
     end.
 
-refine_rows(M) ->
+refine_rows(M) ->                                                          %todo
     lists:map(fun refine_row/1,M).
 
 refine_row(Row) ->
@@ -205,10 +205,10 @@ solve_refined(M) ->
 	true ->
 	    M;
 	false ->
-	    solve_one(guesses(M))
+	    solve_one(guesses(M))                                              %todo
     end.
 
-solve_one([]) ->
+solve_one([]) ->                                                           %todo
     exit(no_solution);
 solve_one([M]) ->
     solve_refined(M);
@@ -252,5 +252,22 @@ valid_solution(M) ->
 
 %% 1 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+start_thread(F) ->
+    Parent = self(),
+    Pid = spawn_link(fun() -> Parent ! {self(),F()} end),
+    {spawn,Pid}.
+
+get_value({spawn,Pid}) ->
+    receive {Pid,X} ->
+	    X
+    end.
+
+parBench(Puzzles) ->
+    Pids = [{Name, start_thread(fun() -> bm(fun()->solve(M) end) end)} || {Name,M} <- Puzzles],
+    [{Name, get_value(Pid)} || {Name, Pid} <- Pids].
+    
+benchmarkspar() ->
+  {ok,Puzzles} = file:consult("problems.txt"),
+  timer:tc(?MODULE,parBench,[Puzzles]).
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
