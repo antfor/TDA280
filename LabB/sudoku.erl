@@ -263,9 +263,10 @@ get_value({spawn,Pid}) ->
     end.
 
 parBench(Puzzles) ->
-    Pids = [{Name, start_thread(fun() -> bm(fun()->solve(M) end) end)} || {Name,M} <- Puzzles],
+    F = fun(M) -> bm(fun()->solve(M) end) end,
+    Pids = [{Name, start_thread(fun() -> F(M) end)} || {Name,M} <- Puzzles],
     [{Name, get_value(Pid)} || {Name, Pid} <- Pids].
-    
+
 benchmarkspar() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,parBench,[Puzzles]).
