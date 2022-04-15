@@ -221,7 +221,6 @@ solve_one([M|Ms]) ->
     end.
 
 %% benchmarks
-
 -define(EXECUTIONS,100).
 
 bm(F) ->
@@ -231,12 +230,27 @@ bm(F) ->
 repeat(F) ->
     [F() || _ <- lists:seq(1,?EXECUTIONS)].
 
-benchmarks(Puzzles) ->
+benchmarks([]) -> [];
+benchmarks([{Name, Puzzle}|Puzzles]) ->
+    Parent = self(),
+    Ref = make_ref(),
+    spawn_link(fun() ->
+        Parent ! {Ref, benchmarks(Puzzles)}
+    end),
+    [{Name, bm(fun() -> solve(Puzzle) end)}] ++ 
+        receive {Ref, Solutions} -> Solutions end.
+
+benchmarksSeq(Puzzles) ->
     [{Name,bm(fun()->solve(M) end)} || {Name,M} <- Puzzles].
+
 
 benchmarks() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,benchmarks,[Puzzles]).
+
+benchmarksSeq() ->
+  {ok,Puzzles} = file:consult("problems.txt"),
+  timer:tc(?MODULE,benchmarksSeq,[Puzzles]).
 
 %% check solutions for validity
 
