@@ -168,7 +168,7 @@ guess(M) ->
 
 guesses(M) ->
     {I,J,Guesses} = guess(M),
-    Ms = [catch refine(update_element(M,I,J,G)) || G <- Guesses],
+    Ms = [catch prefine(update_element(M,I,J,G)) || G <- Guesses],
     SortedGuesses =
 	lists:sort(
 	  [{hard(NewM),NewM}
@@ -272,3 +272,81 @@ benchmarkspar() ->
   timer:tc(?MODULE,parBench,[Puzzles]).
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+pmap(F,Xs) ->
+    Threds = [ start_thread(fun() -> F(X) end) || X <- Xs ],
+    [get_value(Pid) || Pid <- Threds].
+
+chunk(_,[]) -> [];
+chunk(N, Xs) when N > length(Xs) -> [Xs];
+chunk(N, Xs) ->
+    {As,Bs} = lists:split(N,Xs),
+    [As | chunk(N,Bs)].
+
+cmap(N,F,Xs) ->
+    lists:concat(pmap((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
+
+prefine_rows(M) ->
+    cmap(3, fun(R)-> catch refine_row(R) end,M).
+
+prefine(M) ->
+    NewM =                                                                 %todo
+	prefine_rows(
+	  transpose(
+	    prefine_rows(
+	      transpose(
+		unblocks(
+		  prefine_rows(
+		    blocks(M))))))),
+    if M==NewM ->
+	    M;
+       true ->
+	   prefine(NewM)
+    end.
+
+refine3(M) ->
+
+    P1 = start_thread(fun() ->catch refine_rows(M) end),
+    P2 = start_thread(fun() ->catch transpose(refine_rows(transpose(M))) end),
+    P3 = start_thread(fun() ->catch unblocks(refine_rows(blocks(M))) end),
+
+    M1 = get_value(P1),
+    M2 = get_value(P2),
+    M3 = get_value(P3),
+
+    %Zip = lists:zip3(M1,M2,M3),
+    %io:format("~p ~n~n",[length(Zip)]),
+    %NewM = cmap(3,fun filter2/1,Zip),
+    %NewM = lists:map(fun filter2/1,Zip),
+    NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
+
+    if M==NewM ->
+	    M;
+       true ->
+	    refine3(NewM)
+    end.
+
+
+slength(N) when is_number(N)  -> 1;
+slength(Xs) -> length(Xs).
+
+filter(R1,R2,R3)->
+    lists:zipwith3(fun member2/3, R1,R2,R3).
+
+filter2({R1,R2,R3})->
+    lists:zipwith3(fun member2/3, R1,R2,R3).
+
+toList(N)  when is_number(N)  -> [N];
+toList(Xs) -> Xs.
+
+unList([N]) -> N;
+unList(Xs)  -> Xs.
+
+member(E1,E2,E3) ->
+    Es = lists:map(fun(E) -> El = toList(E), {length(El),El} end, [E1,E2,E3]),
+    [{_,Ea},{_,Eb},{_,Ec}] = lists:keysort(1, Es),
+    unList(lists:filter(fun(E) -> lists:member(E,Eb) and lists:member(E,Ec) end,Ea)).
+
+
+member2(E1,E2,E3) ->
+    unList(lists:filter(fun(E) -> lists:member(E,toList(E2)) and lists:member(E,toList(E3)) end,toList(E1))).
