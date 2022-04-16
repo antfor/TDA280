@@ -168,7 +168,7 @@ guess(M) ->
 
 guesses(M) ->
     {I,J,Guesses} = guess(M),
-    Ms = [catch prefine(update_element(M,I,J,G)) || G <- Guesses],
+    Ms = [catch refine(update_element(M,I,J,G)) || G <- Guesses],
     SortedGuesses =
 	lists:sort(
 	  [{hard(NewM),NewM}
@@ -274,8 +274,8 @@ benchmarkspar() ->
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 pmap(F,Xs) ->
-    Threds = [ start_thread(fun() -> F(X) end) || X <- Xs ],
-    [get_value(Pid) || Pid <- Threds].
+    Threds = [ employ(fun() -> F(X) end) || X <- Xs ],
+    [retire(Pid) || Pid <- Threds].
 
 chunk(_,[]) -> [];
 chunk(N, Xs) when N > length(Xs) -> [Xs];
@@ -287,9 +287,10 @@ cmap(N,F,Xs) ->
     lists:concat(pmap((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
 
 prefine_rows(M) ->
-    cmap(3, fun(R)-> catch refine_row(R) end,M).
+    cmap(3,fun(R)-> catch refine_row(R) end,M).
 
-prefine(M) ->
+prefine(0, M) -> refine(M);
+prefine(N,M) ->
     NewM =                                                                 %todo
 	prefine_rows(
 	  transpose(
@@ -301,18 +302,19 @@ prefine(M) ->
     if M==NewM ->
 	    M;
        true ->
-	   prefine(NewM)
+	   prefine(N-1, NewM)
     end.
 
-refine3(M) ->
+prefine3(0, M) -> refine(M);
+prefine3(N, M) ->
 
-    P1 = start_thread(fun() ->catch refine_rows(M) end),
-    P2 = start_thread(fun() ->catch transpose(refine_rows(transpose(M))) end),
-    P3 = start_thread(fun() ->catch unblocks(refine_rows(blocks(M))) end),
+    P1 = employ(fun() ->catch refine_rows(M) end),
+    P2 = employ(fun() ->catch transpose(refine_rows(transpose(M))) end),
+    P3 = employ(fun() ->catch unblocks(refine_rows(blocks(M))) end),
 
-    M1 = get_value(P1),
-    M2 = get_value(P2),
-    M3 = get_value(P3),
+    M1 = retire(P1),
+    M2 = retire(P2),
+    M3 = retire(P3),
 
     %Zip = lists:zip3(M1,M2,M3),
     %io:format("~p ~n~n",[length(Zip)]),
@@ -323,7 +325,7 @@ refine3(M) ->
     if M==NewM ->
 	    M;
        true ->
-	    refine3(NewM)
+	    prefine3(N-1, NewM)
     end.
 
 
@@ -350,3 +352,95 @@ member(E1,E2,E3) ->
 
 member2(E1,E2,E3) ->
     unList(lists:filter(fun(E) -> lists:member(E,toList(E2)) and lists:member(E,toList(E3)) end,toList(E1))).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% pool solved
+
+pool_solve(P) ->
+    Workers = erlang:system_info(schedulers)-1,
+%    io:format("~p ~n", [Workers]),
+    start_pool(Workers),
+    S = pool_solve1(P),
+    pool ! {stop,self()},
+    receive {pool,stopped} -> S end.
+
+pool_solve1(M) ->
+    Solution = solve_refined(prefine(-1,fill(M))),
+    case valid_solution(Solution) of
+	true ->
+	    Solution;
+	false ->
+	    exit({invalid_solution,Solution})
+    end.
+
+benchmarkspool(Puzzles) ->
+    [{Name,bm(fun()->pool_solve(M) end)} || {Name,M} <- Puzzles].
+
+benchmarkspool() ->
+  {ok,Puzzles} = file:consult("problems.txt"),
+  timer:tc(?MODULE,benchmarkspool,[Puzzles]).
+
+%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Worker pool from demo
+%%
+
+start_pool(N) ->
+    true = register(pool,spawn_link(fun()->pool([worker() || _ <- lists:seq(1,N)]) end)).
+
+pool(Workers) ->
+    pool(Workers,Workers).
+
+pool(Workers,All) ->
+    receive
+	{get_worker,Pid} ->
+	    case Workers of
+		[] ->
+		    Pid ! {pool,no_worker},
+		    pool(Workers,All);
+		[W|Ws] ->
+		    Pid ! {pool,W},
+		    pool(Ws,All)
+	    end;
+	{return_worker,W} ->
+	    pool([W|Workers],All);
+	{stop,Pid} ->
+	    [unlink(W) || W <- All],
+	    [exit(W,kill) || W <- All],
+	    unregister(pool),
+	    Pid ! {pool,stopped}
+    end.
+
+worker() ->
+    spawn_link(fun work/0).
+
+work() ->
+    receive
+	{task,Pid,R,F} ->
+	    Pid ! {R,F()},
+	    catch pool ! {return_worker,self()},
+	    work()
+    end.
+
+employ(F) ->
+    case whereis(pool) of
+	undefined ->
+	    ok; %% we're stopping
+	Pool -> Pool ! {get_worker,self()}
+    end,
+    receive
+	{pool,no_worker} ->
+	    {not_speculating,F};
+	{pool,W} ->
+	    R = make_ref(),
+	    W ! {task,self(),R,F},
+	    {speculating,R}
+    end.
+
+retire({not_speculating,F}) ->
+    F();
+retire({speculating,R}) ->
+    receive
+	{R,X} ->
+	    X
+    end.
