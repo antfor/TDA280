@@ -273,6 +273,59 @@ benchmarkspar() ->
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+get_sulotion([]) -> exit(no_solution);
+get_sulotion([S]) ->
+            case not is_exit(S) of
+                false ->  exit(no_solution);
+                true  -> S
+            end;
+get_sulotion([S|Ss]) ->
+            case not is_exit(S) of
+                false ->get_sulotion(Ss);
+                true  -> S
+            end.
+
+solve_refined2(M) ->
+    case solved(M) of
+	true ->
+	    M;
+	false ->
+        Gs = guesses(M),
+        Map = pmap(fun(G)-> catch solve_one([G]) end,Gs),
+        get_sulotion(Map)
+    end.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% pool solved
+
+pool_solve(P) ->
+    Workers = erlang:system_info(schedulers)-1,
+%    io:format("~p ~n", [Workers]),
+    start_pool(Workers),
+    S = pool_solve1(P),
+    pool ! {stop,self()},
+    receive {pool,stopped} -> S end.
+
+pool_solve1(M) ->
+    Solution = solve_refined2(refine(fill(M))),
+    case valid_solution(Solution) of
+	true ->
+	    Solution;
+	false ->
+	    exit({invalid_solution,Solution})
+    end.
+
+benchmarkspool(Puzzles) ->
+    [{Name,bm(fun()->pool_solve(M) end)} || {Name,M} <- Puzzles].
+
+benchmarkspool() ->
+  {ok,Puzzles} = file:consult("problems.txt"),
+  timer:tc(?MODULE,benchmarkspool,[Puzzles]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% misc
+%%
 
 pmap(F,Xs) ->
     Threds = [ employ(fun() -> F(X) end) || X <- Xs ],
@@ -296,110 +349,10 @@ pmap2(F,Xs) ->
 cmap2(N,F,Xs) ->
     lists:concat(pmap2((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
 
-prefine_rows(M) ->
-    cmap(3,fun(R)-> catch refine_row(R) end,M).
-
-prefine(0, M) -> refine(M);
-prefine(N,M) ->
-    NewM =                                                                 %todo
-	prefine_rows(
-	  transpose(
-	    prefine_rows(
-	      transpose(
-		unblocks(
-		  prefine_rows(
-		    blocks(M))))))),
-    if M==NewM ->
-	    M;
-       true ->
-	   prefine(N-1, NewM)
-    end.
-
-prefine3(0, M) -> refine(M);
-prefine3(N, M) ->
-
-    P1 = employ(fun() -> (refine_rows(M)) end),
-    P2 = employ(fun() -> (transpose(refine_rows(transpose(M)))) end),
-%    P3 = employ(fun() -> (unblocks(refine_rows(blocks(M)))) end),
-
-    M3 = unblocks(refine_rows(blocks(M))),
-
-    M1 = retire(P1),
-    M2 = retire(P2),
-%    M3 = retire(P3),
-
-    %Zip = lists:zip3(M1,M2,M3),
-    %io:format("~p ~n~n",[length(Zip)]),
-    %NewM = cmap(3,fun filter2/1,Zip),
-    %NewM = lists:map(fun filter2/1,Zip),
-    NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
-
-    if M==NewM ->
-	    M;
-       true ->
-	    prefine3(N-1, NewM)
-    end.
-
-
-slength(N) when is_number(N)  -> 1;
-slength(Xs) -> length(Xs).
-
-filter(R1,R2,R3)->
-    lists:zipwith3(fun member3/3, R1,R2,R3).
-
-filter2({R1,R2,R3})->
-    lists:zipwith3(fun member3/3, R1,R2,R3).
-
-toList(N)  when is_number(N)  -> [N];
-toList(Xs) -> Xs.
-
-unList([N]) -> N;
-unList(Xs)  -> Xs.
-
-member(E1,E2,E3) ->
-    Es = lists:map(fun(E) -> El = toList(E), {length(El),El} end, [E1,E2,E3]),
-    [{_,Ea},{_,Eb},{_,Ec}] = lists:keysort(1, Es),
-    unList(lists:filter(fun(E) -> lists:member(E,Eb) and lists:member(E,Ec) end,Ea)).
-
-
-member2(E1,E2,E3) ->
-    unList(lists:filter(fun(E) -> lists:member(E,toList(E2)) and lists:member(E,toList(E3)) end,toList(E1))).
-
-member3(E1,E2,E3) ->
-    unList((toList(E1) ++ toList(E2) ++ toList(E3)) -- [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9]).
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% pool solved
-
-pool_solve(P) ->
-    Workers = erlang:system_info(schedulers)-1,
-%    io:format("~p ~n", [Workers]),
-    start_pool(Workers),
-    S = pool_solve1(P),
-    pool ! {stop,self()},
-    receive {pool,stopped} -> S end.
-
-pool_solve1(M) ->
-    Solution = solve_refined(prefine3(-1,fill(M))),
-    case valid_solution(Solution) of
-	true ->
-	    Solution;
-	false ->
-	    exit({invalid_solution,Solution})
-    end.
-
-benchmarkspool(Puzzles) ->
-    [{Name,bm(fun()->pool_solve(M) end)} || {Name,M} <- Puzzles].
-
-benchmarkspool() ->
-  {ok,Puzzles} = file:consult("problems.txt"),
-  timer:tc(?MODULE,benchmarkspool,[Puzzles]).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
+stop() ->
+  receive
+      unpause -> 0
+  end.
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
 %%
