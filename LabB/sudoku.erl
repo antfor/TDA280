@@ -262,6 +262,11 @@ get_value({spawn,Pid}) ->
 	    X
     end.
 
+get_Result(R) ->
+    receive {_,{R,X}} ->
+	    X
+    end.
+
 parBench(Puzzles) ->
     F = fun(M) -> bm(fun()->solve(M) end) end,
     Pids = [{Name, start_thread(fun() -> F(M) end)} || {Name,M} <- Puzzles],
@@ -285,14 +290,21 @@ get_sulotion([S|Ss]) ->
                 true  -> S
             end.
 
+listen_for_result(Ref) -> %send number of msg
+        R = get_Result(Ref),
+        case not is_exit(R) of
+            false -> listen_for_result(Ref);
+            true  -> R
+        end.
+
 solve_refined2(M) ->
     case solved(M) of
 	true ->
 	    M;
 	false ->
         Gs = guesses(M),
-        Map = pmap(fun(G)-> catch solve_one([G]) end,Gs),
-        get_sulotion(Map)
+        Ref = plmap(fun(G)-> catch solve_one([G]) end,Gs),
+        listen_for_result(Ref)
     end.
 
 
@@ -330,6 +342,12 @@ benchmarkspool() ->
 pmap(F,Xs) ->
     Threds = [ employ(fun() -> F(X) end) || X <- Xs ],
     [retire(Pid) || Pid <- Threds].
+
+plmap(F,Xs) ->
+    Ref = make_ref(),
+    [ start_thread(fun() ->{Ref, F(X)} end) || X <- Xs ],
+    Ref.
+
 
 chunk(_,[]) -> [];
 chunk(N, Xs) when N >= length(Xs) -> [Xs];
