@@ -318,19 +318,21 @@ prefine(N,M) ->
 prefine3(0, M) -> refine(M);
 prefine3(N, M) ->
 
-    P1 = employ(fun() ->catch refine_rows(M) end),
-    P2 = employ(fun() ->catch transpose(refine_rows(transpose(M))) end),
-    P3 = employ(fun() ->catch unblocks(refine_rows(blocks(M))) end),
+    P1 = employ(fun() -> (refine_rows(M)) end),
+    P2 = employ(fun() -> (transpose(refine_rows(transpose(M)))) end),
+%    P3 = employ(fun() -> (unblocks(refine_rows(blocks(M)))) end),
+
+    M3 = unblocks(refine_rows(blocks(M))),
 
     M1 = retire(P1),
     M2 = retire(P2),
-    M3 = retire(P3),
+%    M3 = retire(P3),
 
-    Zip = lists:zip3(M1,M2,M3),
+    %Zip = lists:zip3(M1,M2,M3),
     %io:format("~p ~n~n",[length(Zip)]),
-    NewM = cmap(3,fun filter2/1,Zip),
+    %NewM = cmap(3,fun filter2/1,Zip),
     %NewM = lists:map(fun filter2/1,Zip),
-    %NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
+    NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
 
     if M==NewM ->
 	    M;
