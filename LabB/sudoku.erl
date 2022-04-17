@@ -359,7 +359,8 @@ solve_one4([M|Ms]) ->
 	    solve_one4(Ms);
 	Solution ->
         root ! {self(),{result,Solution}},
-        exit(no_solution)
+        %exit(no_solution)
+        Solution
     end.
 
 %%%%%%
@@ -500,8 +501,12 @@ work() ->
 	    Pid ! {R,F()},
 	    catch pool ! {return_worker,self()},
 	    work();
-    {ltask,_,_,F} ->
-        F(),
+    {ltask,Pid,R,F} ->
+        {P,E}  = F(),
+        case is_exit(E) of
+            true ->  Pid ! {R,{P,E}};
+            false -> 0
+        end,
         catch pool ! {return_worker,self()},
         work()
     end.
