@@ -205,7 +205,8 @@ solve_refined(M) ->
 	true ->
 	    M;
 	false ->
-	    solve_one(guesses(M))                                              %todo
+        Gs = guesses(M),
+	    solve_one(Gs)                                              %todo
     end.
 
 solve_one([]) ->                                                           %todo
@@ -263,8 +264,15 @@ get_value({spawn,Pid}) ->
     end.
 
 get_Result(R) ->
-    receive {_,{R,X}} ->
-	    X
+    receive
+        {_,{R,X}} ->
+	               X;
+
+        {_,{result,X}} ->
+                   X;
+        M ->
+            print(M),
+            get_Result(R)
     end.
 
 parBench(Puzzles) ->
@@ -286,14 +294,15 @@ get_sulotion([S]) ->
             end;
 get_sulotion([S|Ss]) ->
             case not is_exit(S) of
-                false ->get_sulotion(Ss);
+                false -> get_sulotion(Ss);
                 true  -> S
             end.
 
-listen_for_result(Ref) -> %send number of msg
+listen_for_result(_, 0) -> exit(no_solution);
+listen_for_result(Ref,N) -> %send number of msg
         R = get_Result(Ref),
         case not is_exit(R) of
-            false -> listen_for_result(Ref);
+            false -> listen_for_result(Ref,N-1);
             true  -> R
         end.
 
@@ -303,11 +312,88 @@ solve_refined2(M) ->
 	    M;
 	false ->
         Gs = guesses(M),
-        Ref = plmap(fun(G)-> catch solve_one([G]) end,Gs),
-        listen_for_result(Ref)
+        if
+            length(Gs) < 2 ->
+                solve_one(Gs);
+            true ->
+                plmap(fun(G)-> catch solve_one([G]) end,Gs),
+                listen_for_result(result, length(Gs))
+        end
+
+    end.
+
+%%%%
+solve_refined41(M) ->
+    case solved(M) of
+	true ->
+	    M;
+	false ->
+        Gs = guesses(M),
+        register(root, self()),
+        Ref = plmap(fun(G)-> catch solve_one4([G]) end,Gs),
+        R = listen_for_result(Ref, length(Gs)),
+        unregister(root),
+        R
+    end.
+
+solve_refined4(M) ->
+    case solved(M) of
+	true ->
+	    M;
+	false ->
+        Gs = guesses(M),
+        if
+            length(Gs) < 2 -> solve_one4(Gs);
+            true -> solve_one4(Gs)
+        end
     end.
 
 
+solve_one4([]) ->                                                           %todo
+    exit(no_solution);
+solve_one4([M]) ->
+    solve_refined4(M);
+solve_one4([M|Ms]) ->
+    case catch solve_refined4(M) of
+	{'EXIT',no_solution} ->
+	    solve_one4(Ms);
+	Solution ->
+        root ! {self(),{result,Solution}},
+        exit(no_solution)
+    end.
+
+%%%%%%
+
+solve_refined3(M) ->
+    case solved(M) of
+	true ->
+	    M;
+	false ->
+        Gs = guesses(M),
+        if
+            length(Gs) < 2 -> solve_one(Gs);
+            true ->
+                [G2|G2s] = Gs,
+                Map = pmap(fun(G)-> catch solve_one2([G]) end,G2s),
+                [R] = [catch solve_one2([G2])],
+                case is_exit(R) of
+                    false -> R;
+                    true -> get_sulotion(Map)
+                end
+        end
+    end.
+
+solve_one2([]) ->
+    exit(no_solution);
+solve_one2([M]) ->
+    solve_refined3(M);
+solve_one2([M|Ms]) ->
+    case catch solve_refined3(M) of
+	{'EXIT',no_solution} ->
+	    solve_one2(Ms);
+	Solution ->
+	    Solution
+    end.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% pool solved
 
@@ -320,7 +406,7 @@ pool_solve(P) ->
     receive {pool,stopped} -> S end.
 
 pool_solve1(M) ->
-    Solution = solve_refined2(refine(fill(M))),
+    Solution = solve_refined41(refine(fill(M))),
     case valid_solution(Solution) of
 	true ->
 	    Solution;
@@ -345,7 +431,7 @@ pmap(F,Xs) ->
 
 plmap(F,Xs) ->
     Ref = make_ref(),
-    [ start_thread(fun() ->{Ref, F(X)} end) || X <- Xs ],
+    [ employl(fun() ->{Ref, F(X)} end) || X <- Xs ],
     Ref.
 
 
@@ -371,6 +457,10 @@ stop() ->
   receive
       unpause -> 0
   end.
+
+print(R) ->
+    io:format("~p ~n",[R]).
+
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
 %%
@@ -409,7 +499,11 @@ work() ->
 	{task,Pid,R,F} ->
 	    Pid ! {R,F()},
 	    catch pool ! {return_worker,self()},
-	    work()
+	    work();
+    {ltask,_,_,F} ->
+        F(),
+        catch pool ! {return_worker,self()},
+        work()
     end.
 
 employ(F) ->
@@ -425,6 +519,21 @@ employ(F) ->
 	    R = make_ref(),
 	    W ! {task,self(),R,F},
 	    {speculating,R}
+    end.
+
+employl(F) ->
+    case whereis(pool) of
+    undefined ->
+        ok; %% we're stopping
+    Pool -> Pool ! {get_worker,self()}
+    end,
+    receive
+    {pool,no_worker} ->
+        {not_speculating,F};
+    {pool,W} ->
+        R = make_ref(),
+        W ! {ltask,self(),R,F},
+        {speculating,R}
     end.
 
 retire({not_speculating,F}) ->
