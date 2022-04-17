@@ -273,18 +273,28 @@ benchmarkspar() ->
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
 pmap(F,Xs) ->
     Threds = [ employ(fun() -> F(X) end) || X <- Xs ],
     [retire(Pid) || Pid <- Threds].
 
 chunk(_,[]) -> [];
-chunk(N, Xs) when N > length(Xs) -> [Xs];
+chunk(N, Xs) when N >= length(Xs) -> [Xs];
 chunk(N, Xs) ->
     {As,Bs} = lists:split(N,Xs),
     [As | chunk(N,Bs)].
 
 cmap(N,F,Xs) ->
-    lists:concat(pmap((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
+    lists:concat(pmap ((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
+
+
+pmap2(F,Xs) ->
+    Threds = [ start_thread(fun() -> F(X) end) || X <- Xs ],
+    [get_value(Pid) || Pid <- Threds].
+
+
+cmap2(N,F,Xs) ->
+    lists:concat(pmap2((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
 
 prefine_rows(M) ->
     cmap(3,fun(R)-> catch refine_row(R) end,M).
@@ -316,11 +326,11 @@ prefine3(N, M) ->
     M2 = retire(P2),
     M3 = retire(P3),
 
-    %Zip = lists:zip3(M1,M2,M3),
+    Zip = lists:zip3(M1,M2,M3),
     %io:format("~p ~n~n",[length(Zip)]),
-    %NewM = cmap(3,fun filter2/1,Zip),
+    NewM = cmap(3,fun filter2/1,Zip),
     %NewM = lists:map(fun filter2/1,Zip),
-    NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
+    %NewM =lists:zipwith3(fun filter/3,M1,M2,M3),
 
     if M==NewM ->
 	    M;
@@ -333,10 +343,10 @@ slength(N) when is_number(N)  -> 1;
 slength(Xs) -> length(Xs).
 
 filter(R1,R2,R3)->
-    lists:zipwith3(fun member2/3, R1,R2,R3).
+    lists:zipwith3(fun member3/3, R1,R2,R3).
 
 filter2({R1,R2,R3})->
-    lists:zipwith3(fun member2/3, R1,R2,R3).
+    lists:zipwith3(fun member3/3, R1,R2,R3).
 
 toList(N)  when is_number(N)  -> [N];
 toList(Xs) -> Xs.
@@ -353,6 +363,9 @@ member(E1,E2,E3) ->
 member2(E1,E2,E3) ->
     unList(lists:filter(fun(E) -> lists:member(E,toList(E2)) and lists:member(E,toList(E3)) end,toList(E1))).
 
+member3(E1,E2,E3) ->
+    unList((toList(E1) ++ toList(E2) ++ toList(E3)) -- [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9]).
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% pool solved
@@ -366,7 +379,7 @@ pool_solve(P) ->
     receive {pool,stopped} -> S end.
 
 pool_solve1(M) ->
-    Solution = solve_refined(prefine(-1,fill(M))),
+    Solution = solve_refined(prefine3(-1,fill(M))),
     case valid_solution(Solution) of
 	true ->
 	    Solution;
@@ -380,6 +393,10 @@ benchmarkspool(Puzzles) ->
 benchmarkspool() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,benchmarkspool,[Puzzles]).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
