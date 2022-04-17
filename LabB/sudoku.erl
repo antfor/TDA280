@@ -271,7 +271,8 @@ get_Result(R) ->
         {_,{result,X}} ->
                    X;
         M ->
-            print(M),
+        %   print(R),
+        %    print(M),
             get_Result(R)
     end.
 
@@ -299,7 +300,7 @@ get_sulotion([S|Ss]) ->
             end.
 
 listen_for_result(_, 0) -> exit(no_solution);
-listen_for_result(Ref,N) -> %send number of msg
+listen_for_result(Ref,N) ->
         R = get_Result(Ref),
         case not is_exit(R) of
             false -> listen_for_result(Ref,N-1);
@@ -410,6 +411,7 @@ pool_solve1(M) ->
     Solution = solve_refined41(refine(fill(M))),
     case valid_solution(Solution) of
 	true ->
+    %    print(Solution),
 	    Solution;
 	false ->
 	    exit({invalid_solution,Solution})
@@ -460,7 +462,7 @@ stop() ->
   end.
 
 print(R) ->
-    io:format("~p ~n",[R]).
+    io:format("~p ~n ~n",[R]).
 
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
