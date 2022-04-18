@@ -263,17 +263,18 @@ get_value({spawn,Pid}) ->
 	    X
     end.
 
-get_Result(R) ->
+get_Result({Pid,Ref}) ->
     receive
-        {_,{R,X}} ->
+        {_,{Pid,X}} ->
 	               X;
 
-        {_,{result,X}} ->
+       {_,{Ref,X}} ->
                    X;
         M ->
-        %   print(R),
-        %    print(M),
-            get_Result(R)
+            %print(Pid),
+            %print(Ref),
+            %print(M),
+            get_Result({Pid,Ref})
     end.
 
 parBench(Puzzles) ->
@@ -331,35 +332,36 @@ solve_refined41(M) ->
 	false ->
         Gs = guesses(M),
         register(root, self()),
-        Ref = plmap(fun(G)-> catch solve_one4([G]) end,Gs),
-        R = listen_for_result(Ref, length(Gs)),
+        Ref = make_ref(),
+        Pid = plmap(fun(G)-> catch solve_one4(Ref,[G]) end,Gs),
+        R = listen_for_result({Pid,Ref}, length(Gs)),
         unregister(root),
         R
     end.
 
-solve_refined4(M) ->
+solve_refined4(Ref,M) ->
     case solved(M) of
 	true ->
 	    M;
 	false ->
         Gs = guesses(M),
         if
-            length(Gs) < 2 -> solve_one4(Gs);
-            true -> solve_one4(Gs)
+            length(Gs) < 2 -> solve_one4(Ref,Gs);
+            true -> solve_one4(Ref,Gs)
         end
     end.
 
 
-solve_one4([]) ->                                                           %todo
+solve_one4(_,[]) ->                                                           %todo
     exit(no_solution);
-solve_one4([M]) ->
-    solve_refined4(M);
-solve_one4([M|Ms]) ->
-    case catch solve_refined4(M) of
+solve_one4(Ref,[M]) ->
+    solve_refined4(Ref,M);
+solve_one4(Ref,[M|Ms]) ->
+    case catch solve_refined4(Ref,M) of
 	{'EXIT',no_solution} ->
-	    solve_one4(Ms);
+	    solve_one4(Ref,Ms);
 	Solution ->
-        root ! {self(),{result,Solution}},
+        root ! {self(),{Ref,Solution}},
         %exit(no_solution)
         Solution
     end.
