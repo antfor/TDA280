@@ -268,13 +268,8 @@ get_Result({Pid,Ref}) ->
         {_,{Pid,X}} ->
 	               X;
 
-       {_,{Ref,X}} ->
-                   X;
-        M ->
-            %print(Pid),
-            %print(Ref),
-            %print(M),
-            get_Result({Pid,Ref})
+        {_,{Ref,X}} ->
+                   X
     end.
 
 parBench(Puzzles) ->
@@ -318,8 +313,8 @@ solve_refined2(M) ->
             length(Gs) < 2 ->
                 solve_one(Gs);
             true ->
-                plmap(fun(G)-> catch solve_one([G]) end,Gs),
-                listen_for_result(result, length(Gs))
+                {Pid,N} = plmap(fun(G)-> catch solve_one([G]) end,Gs),
+                listen_for_result({Pid,Pid}, N)
         end
 
     end.
@@ -333,71 +328,44 @@ solve_refined41(M) ->
         Gs = guesses(M),
         register(root, self()),
         Ref = make_ref(),
-        Pid = plmap(fun(G)-> catch solve_one4(Ref,[G]) end,Gs),
-        R = listen_for_result({Pid,Ref}, length(Gs)),
+        {Pid, N} = plmap(fun(G)-> catch solve_one4(1,Ref,[G]) end,Gs),
+        R = listen_for_result({Pid,Ref}, N),
         unregister(root),
         R
     end.
 
-solve_refined4(Ref,M) ->
+solve_refined4(D,Ref,M) ->
     case solved(M) of
 	true ->
 	    M;
 	false ->
         Gs = guesses(M),
         if
-            length(Gs) < 2 -> solve_one4(Ref,Gs);
-            true -> solve_one4(Ref,Gs)
+            (length(Gs) < 2) or (D < 1) -> solve_one4(D,Ref,Gs);
+
+            true ->
+                Pid = make_ref(),
+                {Pids, N} = plmap(fun(G)-> catch solve_one4(D-1,Ref,[G]) end,Gs),
+                listen_for_result({Pid,Pids}, N)
         end
     end.
 
 
-solve_one4(_,[]) ->                                                           %todo
+solve_one4(_,_,[]) ->                                                           %todo
     exit(no_solution);
-solve_one4(Ref,[M]) ->
-    solve_refined4(Ref,M);
-solve_one4(Ref,[M|Ms]) ->
-    case catch solve_refined4(Ref,M) of
+solve_one4(D,Ref,[M]) ->
+    solve_refined4(D,Ref,M);
+solve_one4(D,Ref,[M|Ms]) ->
+    case catch solve_refined4(D,Ref,M) of
 	{'EXIT',no_solution} ->
-	    solve_one4(Ref,Ms);
+	    solve_one4(D,Ref,Ms);
 	Solution ->
         root ! {self(),{Ref,Solution}},
         %exit(no_solution)
         Solution
     end.
 
-%%%%%%
 
-solve_refined3(M) ->
-    case solved(M) of
-	true ->
-	    M;
-	false ->
-        Gs = guesses(M),
-        if
-            length(Gs) < 2 -> solve_one(Gs);
-            true ->
-                [G2|G2s] = Gs,
-                Map = pmap(fun(G)-> catch solve_one2([G]) end,G2s),
-                [R] = [catch solve_one2([G2])],
-                case is_exit(R) of
-                    false -> R;
-                    true -> get_sulotion(Map)
-                end
-        end
-    end.
-
-solve_one2([]) ->
-    exit(no_solution);
-solve_one2([M]) ->
-    solve_refined3(M);
-solve_one2([M|Ms]) ->
-    case catch solve_refined3(M) of
-	{'EXIT',no_solution} ->
-	    solve_one2(Ms);
-	Solution ->
-	    Solution
-    end.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% pool solved
 
@@ -413,7 +381,7 @@ pool_solve1(M) ->
     Solution = solve_refined41(refine(fill(M))),
     case valid_solution(Solution) of
 	true ->
-    %    print(Solution),
+        %print(Solution),
 	    Solution;
 	false ->
 	    exit({invalid_solution,Solution})
@@ -436,9 +404,34 @@ pmap(F,Xs) ->
 
 plmap(F,Xs) ->
     Ref = make_ref(),
-    [ employl(fun() ->{Ref, F(X)} end) || X <- Xs ],
-    Ref.
+%    [ employ_lazy(fun() -> {Ref, F(X)} end) || X <- Xs ],
+    N = lazyList(Ref,F,Xs,0),
+    {Ref,N}.
 
+lazyList(_,_,[],N)     -> N;
+lazyList(Ref,F,[X|Xs],N) ->
+    Work =  employ(fun() -> {Ref, F(X)} end),
+    case Work of
+        {not_speculating, SeqF} ->
+            {R,E} = SeqF(),
+            Bool = is_exit(E),
+            case Bool of
+                false ->
+                    self() ! {Ref, {R,E}},
+                    N+1;
+                true -> lazyList(Ref,F,Xs,N)
+            end;
+        {speculating,R}     ->
+                        %[R | lazyList(Ref,F,Xs)]
+                        lazyList(Ref,F,Xs,N+1)
+    end.
+
+
+
+plmap2(F,Xs) ->
+    Ref = make_ref(),
+    [ employ(fun() ->{Ref, F(X)} end) || X <- Xs ],
+    Ref.
 
 chunk(_,[]) -> [];
 chunk(N, Xs) when N >= length(Xs) -> [Xs];
@@ -530,7 +523,7 @@ employ(F) ->
 	    {speculating,R}
     end.
 
-employl(F) ->
+employ_lazy(F) ->
     case whereis(pool) of
     undefined ->
         ok; %% we're stopping
@@ -538,10 +531,13 @@ employl(F) ->
     end,
     receive
     {pool,no_worker} ->
-        {not_speculating,F};
+        R = make_ref(),
+        V = F(),
+        self() ! {R,V},
+        {not_speculating, fun() -> V end};
     {pool,W} ->
         R = make_ref(),
-        W ! {ltask,self(),R,F},
+        W ! {task,self(),R,F},
         {speculating,R}
     end.
 
