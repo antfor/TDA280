@@ -328,7 +328,7 @@ solve_refined41(M) ->
         Gs = guesses(M),
         register(root, self()),
         Ref = make_ref(),
-        {Pid, N} = plmap(fun(G)-> catch solve_one4(1,Ref,[G]) end,Gs),
+        {Pid, N} = plmap(fun(G)-> catch solve_one4(4,Ref,[G]) end,Gs),
         R = listen_for_result({Pid,Ref}, N),
         unregister(root),
         R
@@ -345,7 +345,7 @@ solve_refined4(D,Ref,M) ->
 
             true ->
                 Pid = make_ref(),
-                {Pids, N} = plmap(fun(G)-> catch solve_one4(D-1,Ref,[G]) end,Gs),
+                {Pids, N} = plmap2(fun(G)-> catch solve_one4(D-1,Ref,[G]) end,Gs),
                 listen_for_result({Pid,Pids}, N)
         end
     end.
@@ -430,8 +430,8 @@ lazyList(Ref,F,[X|Xs],N) ->
 
 plmap2(F,Xs) ->
     Ref = make_ref(),
-    [ employ(fun() ->{Ref, F(X)} end) || X <- Xs ],
-    Ref.
+    [ employ_lazy(fun() ->{Ref, F(X)} end) || X <- Xs ],
+    {Ref,length(Xs)}.
 
 chunk(_,[]) -> [];
 chunk(N, Xs) when N >= length(Xs) -> [Xs];
