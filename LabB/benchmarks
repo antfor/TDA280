@@ -1,0 +1,121 @@
+Part1 ------------------------------------------------
+NORMAL BENCHMARKS FUNCTION:
+    FULL TIME      23169511 micros
+    ------------------------------
+    wildcat        0.363780 millis
+    diabolical     19.55025 millis
+    vegard_hanssen 39.41247 millis
+    challenge      2.738330 millis
+    challenge1     151.9398 millis
+    extreme        3.818240 millis
+    seventeen      13.87193 millis
+
+PARALLEL BENCHMARKS FUNCTION:
+    FULL TIME      15657456 micros
+    ------------------------------
+    wildcat        0.308290 millis
+    diabolical     21.67918 millis
+    vegard_hanssen 41.84447 millis
+    challenge      3.565560 millis
+    challenge1     156.5612 millis
+    extreme        6.018070 millis
+    seventeen      15.80602 millis
+
+NOTE: Full time roughly equals the time of challenge1 * 100
+
+SPEEDUP: Roughly 1.47
+
+Part2 ------------------------------------------------
+NORMAL REFINE_ROWS FUNCTION:
+    FULL TIME      23169511 micros
+    ------------------------------
+    wildcat        0.363780 millis
+    diabolical     19.55025 millis
+    vegard_hanssen 39.41247 millis
+    challenge      2.738330 millis
+    challenge1     151.9398 millis
+    extreme        3.818240 millis
+    seventeen      13.87193 millis
+
+PARALLEL REFINE_ROWS CHUNKS 9 FUNCTION:
+    FULL TIME      30270359 micros
+    ------------------------------
+    wildcat        0.303220 millis
+    diabolical     24.22754 millis
+    vegard_hanssen 51.10199 millis
+    challenge      3.516380 millis
+    challenge1     199.8601 millis
+    extreme        5.013530 millis
+    seventeen      18.68062 millis
+
+SPEEDUP: Roughly 0.7654
+
+PARALLEL REFINE_ROWS CHUNKS 3 FUNCTION:
+    FULL TIME      61322885 micros
+    ------------------------------
+    wildcat        0.615280 millis
+    diabolical     48.54342 millis
+    vegard_hanssen 105.2236 millis
+    challenge      7.058310 millis
+    challenge1     405.9311 millis
+    extreme        10.32354 millis
+    seventeen      35.53331 millis
+
+NOTE: The more the work is split the slower the performance becomes. refine_rows does 
+      not provide enough work to benefit from parallelization.
+
+SPEEDUP: Roughly 0.3778
+
+POOLING 11 CORES REFINE_ROWS CHUNKS 9 FUNCTION:
+    FULL TIME      28110073 micros
+    ------------------------------
+    wildcat        0.167600 millis
+    diabolical     23.53579 millis
+    vegard_hanssen 48.66484 millis
+    challenge      3.260630 millis
+    challenge1     184.1023 millis
+    extreme        4.530250 millis
+    seventeen      16.83860 millis
+
+SPEEDUP: Roughly 0.8242
+
+POOLING 11 CORES REFINE_ROWS CHUNKS 3 FUNCTION:
+    FULL TIME      47762491 micros
+    ------------------------------
+    wildcat        0.434360 millis
+    diabolical     38.30095 millis
+    vegard_hanssen 78.78722 millis
+    challenge      5.466940 millis
+    challenge1     319.4085 millis
+    extreme        7.960680 millis
+    seventeen      27.26549 millis
+
+SPEEDUP: Roughly 0.4850
+
+NOTE: Faster but still not good enough.
+
+POOLING 11 CORES PAR GUESSES FUNCTION:
+    FULL TIME      22524417 micros
+    ------------------------------
+    wildcat        0.220090 millis
+    diabolical     19.80954 millis
+    vegard_hanssen 37.65708 millis
+    challenge      2.378070 millis
+    challenge1     147.3284 millis
+    extreme        3.764790 millis
+    seventeen      14.08549 millis
+
+SPEEDUP: Basically none
+
+POOLING 6 CORES PAR GUESSES FUNCTION:
+    FULL TIME      24658903 micros
+    ------------------------------
+    wildcat        0.180520 millis
+    diabolical     21.84347 millis
+    vegard_hanssen 42.45867 millis
+    challenge      2.726910 millis
+    challenge1     159.9697 millis
+    extreme        4.070640 millis
+    seventeen      15.33839 millis
+
+SPEEDUP: Roughly 0.9396
