@@ -216,10 +216,11 @@ solve_refined(M) ->
 	true ->
 	    M;
 	false ->
-	    solve_one(guesses(M))   %todo
+        solve_one_pool(guesses(M))
+	    %%solve_one(guesses(M))
     end.
 
-solve_one([]) ->                %todo
+solve_one([]) ->
     exit(no_solution);
 solve_one([M]) ->
     solve_refined(M);
@@ -231,6 +232,16 @@ solve_one([M|Ms]) ->
 	    Solution
     end.
 
+solve_one_pool([]) ->
+    exit(no_solution);
+solve_one_pool([M|Ms]) ->
+    Status = pool_send_work(fun() -> catch solve_one_pool(Ms) end),
+    case catch solve_refined(M) of
+    {'EXIT',no_solution} ->
+	    pool_wait_for_value(Status); %% It is not a must to actually look at the received messages
+	Solution ->
+	    Solution
+    end.
 %% benchmarks
 -define(EXECUTIONS,100).
 
@@ -243,7 +254,7 @@ repeat(F) ->
 
 benchmarks(Puzzles) ->
     %%start_pool(erlang:system_info(schedulers) - 1),
-    start_pool(6),
+    start_pool(11),
     Res = [{Name,bm(fun()->solve(M) end)} || {Name,M} <- Puzzles],
     pool ! {stop,self()},
     receive {pool,stopped} -> Res end.
@@ -283,8 +294,8 @@ start_thread(F) ->
     Pid = spawn_link(fun() -> Parent ! {self(),F()} end),
     {spawned, Pid}.
 
-wait_for_value({spawned, Pid}) ->
-    receive {Pid, Value} -> Value end.
+wait_for_value(Pid) ->
+    receive {Pid, Res} -> Res end.
 
 %% Parallel mapping----------------------------------------------------------
 chunk(N, XS) ->
