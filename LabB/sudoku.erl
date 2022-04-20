@@ -83,7 +83,7 @@ fill(M) ->
 %% not to be
 
 refine(M) ->
-    NewM =                                                                 %todo
+    NewM =
 	refine_rows(
 	  transpose(
 	    refine_rows(
@@ -97,7 +97,7 @@ refine(M) ->
 	    refine(NewM)
     end.
 
-refine_rows(M) ->                                                          %todo
+refine_rows(M) ->
     lists:map(fun refine_row/1,M).
 
 refine_row(Row) ->
@@ -206,10 +206,10 @@ solve_refined(M) ->
 	    M;
 	false ->
         Gs = guesses(M),
-	    solve_one(Gs)                                              %todo
+	    solve_one(Gs)
     end.
 
-solve_one([]) ->                                                           %todo
+solve_one([]) ->
     exit(no_solution);
 solve_one([M]) ->
     solve_refined(M);
@@ -224,8 +224,6 @@ solve_one([M|Ms]) ->
 %% benchmarks
 
 -define(EXECUTIONS,100).
--define(Hard, 203). % 200-220 good for me
--define(Depth, 4).  % 1-5     good for me
 
 bm(F) ->
     {T,_} = timer:tc(?MODULE,repeat,[F]),
@@ -265,15 +263,6 @@ get_value({spawn,Pid}) ->
 	    X
     end.
 
-get_Result({Pid,Ref}) ->
-    receive
-        {_,{Pid,X}} ->
-	               X;
-
-        {_,{Ref,X}} ->
-                   X
-    end.
-
 parBench(Puzzles) ->
     F = fun(M) -> bm(fun()->solve(M) end) end,
     Pids = [{Name, start_thread(fun() -> F(M) end)} || {Name,M} <- Puzzles],
@@ -285,88 +274,75 @@ benchmarkspar() ->
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-get_sulotion([]) -> exit(no_solution);
-get_sulotion([S]) ->
-            case not is_exit(S) of
-                false ->  exit(no_solution);
-                true  -> S
-            end;
-get_sulotion([S|Ss]) ->
-            case not is_exit(S) of
-                false -> get_sulotion(Ss);
-                true  -> S
-            end.
-
-listen_for_result(_, 0) -> exit(no_solution);
-listen_for_result(Ref,N) ->
-        R = get_Result(Ref),
-        case not is_exit(R) of
-            false -> listen_for_result(Ref,N-1);
-            true  -> R
-        end.
-
-solve_refined2(M) ->
-    case solved(M) of
-	true ->
-	    M;
-	false ->
-        Gs = guesses(M),
-        if
-            length(Gs) < 2 ->
-                solve_one(Gs);
-            true ->
-                {Pid,N} = plmap(fun(G)-> catch solve_one([G]) end,Gs),
-                listen_for_result({Pid,Pid}, N)
-        end
-
-    end.
-
-%%%%
-solve_refined41(M) ->
+solve_refined_par_root(M) ->
     case solved(M) of
 	true ->
 	    M;
 	false ->
         Gs = guesses(M),
         register(root, self()),
-        Ref = make_ref(),
-        {Pid, N} = plmap(fun(G)-> catch solve_one4(?Depth ,Ref,[G]) end,Gs),
-        R = listen_for_result({Pid,Ref}, N),
+        Ref1 = make_ref(),
+        Ref2 = par_map(fun(G)-> catch solve_one_par(4 ,Ref1,[G]) end,Gs),
+        R = listen_for_result({Ref1,Ref2}, length(Gs)),
         unregister(root),
         R
     end.
 
-solve_refined4(D,Ref,M) ->
+solve_refined_par_branch(D,Ref,M) ->
     case solved(M) of
 	true ->
 	    M;
 	false ->
         Gs = guesses(M),
-        Hard = ?Hard < hard(M),
+        Hard = 205 < hard(M), % 200 -220
         if
-            (length(Gs) < 2) or ((D < 1) and (not Hard))  -> solve_one4(D,Ref,Gs);
+            % sequential
+            (length(Gs) < 2) or ((D < 1) and (not Hard))  -> solve_one_par(D,Ref,Gs);
 
+            % parallel
             true ->
-                Pid = make_ref(),
-                {Pids, N} = plmap(fun(G)-> catch solve_one4(D-1,Ref,[G]) end,Gs),
-                listen_for_result({Pid,Pids}, N)
+                Ref1 = make_ref(),
+                Ref2 = par_map(fun(G)-> catch solve_one_par(D-1,Ref,[G]) end,Gs),
+                listen_for_result({Ref1,Ref2}, length(Gs))
         end
     end.
 
 
-solve_one4(_,_,[]) ->                                                           %todo
+solve_one_par(_,_,[]) ->
     exit(no_solution);
-solve_one4(D,Ref,[M]) ->
-    solve_refined4(D,Ref,M);
-solve_one4(D,Ref,[M|Ms]) ->
-    case catch solve_refined4(D,Ref,M) of
+solve_one_par(D,Ref,[M]) ->
+    solve_refined_par_branch(D,Ref,M);
+solve_one_par(D,Ref,[M|Ms]) ->
+    case catch solve_refined_par_branch(D,Ref,M) of
 	{'EXIT',no_solution} ->
-	    solve_one4(D,Ref,Ms);
+	    solve_one_par(D,Ref,Ms);
 	Solution ->
         root ! {self(),{Ref,Solution}},
-        %exit(no_solution)
         Solution
     end.
+
+
+par_map(F,Xs) ->
+    Ref = make_ref(),
+    [ employ_or_work(fun() ->{Ref, F(X)} end) || X <- Xs ],
+    Ref.
+
+get_Result({Ref1,Ref2}) ->
+    receive
+        {_,{Ref1,X}} ->
+	               X;
+
+        {_,{Ref2,X}} ->
+                   X
+    end.
+
+listen_for_result(_, 0) -> exit(no_solution);
+listen_for_result(Refs,N) ->
+        R = get_Result(Refs),
+        case not is_exit(R) of
+            false -> listen_for_result(Refs,N-1);
+            true  -> R
+        end.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -381,10 +357,9 @@ pool_solve(P) ->
     receive {pool,stopped} -> S end.
 
 pool_solve1(M) ->
-    Solution = solve_refined41(refine(fill(M))),
+    Solution = solve_refined_par_root(refine(fill(M))),
     case valid_solution(Solution) of
 	true ->
-        %print(Solution),
 	    Solution;
 	false ->
 	    exit({invalid_solution,Solution})
@@ -397,71 +372,7 @@ benchmarkspool() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,benchmarkspool,[Puzzles]).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% misc
-%%
-
-pmap(F,Xs) ->
-    Threds = [ employ(fun() -> F(X) end) || X <- Xs ],
-    [retire(Pid) || Pid <- Threds].
-
-plmap(F,Xs) ->
-    Ref = make_ref(),
-%    [ employ_lazy(fun() -> {Ref, F(X)} end) || X <- Xs ],
     N = lazyList(Ref,F,Xs,0),
-    {Ref,N}.
-
-lazyList(_,_,[],N)     -> N;
-lazyList(Ref,F,[X|Xs],N) ->
-    Work =  employ(fun() -> {Ref, F(X)} end),
-    case Work of
-        {not_speculating, SeqF} ->
-            {R,E} = SeqF(),
-            Bool = is_exit(E),
-            case Bool of
-                false ->
-                    self() ! {Ref, {R,E}},
-                    N+1;
-                true -> lazyList(Ref,F,Xs,N)
-            end;
-        {speculating,R}     ->
-                        %[R | lazyList(Ref,F,Xs)]
-                        lazyList(Ref,F,Xs,N+1)
-    end.
-
-
-
-plmap2(F,Xs) ->
-    Ref = make_ref(),
-    [ employ_lazy(fun() ->{Ref, F(X)} end) || X <- Xs ],
-    {Ref,length(Xs)}.
-
-chunk(_,[]) -> [];
-chunk(N, Xs) when N >= length(Xs) -> [Xs];
-chunk(N, Xs) ->
-    {As,Bs} = lists:split(N,Xs),
-    [As | chunk(N,Bs)].
-
-cmap(N,F,Xs) ->
-    lists:concat(pmap ((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
-
-
-pmap2(F,Xs) ->
-    Threds = [ start_thread(fun() -> F(X) end) || X <- Xs ],
-    [get_value(Pid) || Pid <- Threds].
-
-
-cmap2(N,F,Xs) ->
-    lists:concat(pmap2((fun(X) -> lists: map(F,X) end), chunk(N, Xs))).
-
-stop() ->
-  receive
-      unpause -> 0
-  end.
-
-print(R) ->
-    io:format("~p ~n ~n",[R]).
-
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
 %%
@@ -526,7 +437,7 @@ employ(F) ->
 	    {speculating,R}
     end.
 
-employ_lazy(F) ->
+employ_or_work(F) ->
     case whereis(pool) of
     undefined ->
         ok; %% we're stopping
