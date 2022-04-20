@@ -119,3 +119,31 @@ POOLING 6 CORES PAR GUESSES FUNCTION:
     seventeen      15.33839 millis
 
 SPEEDUP: Roughly 0.9396
+
+POOLING 11 CORES PAR GUESSES FUNCTION:
+    FULL TIME      10668605 micros
+    ------------------------------
+    wildcat        0.213690 millis
+    diabolical     10.15575 millis
+    vegard_hanssen 18.46178 millis
+    challenge      1.689020 millis
+    challenge1     46.27108 millis
+    extreme        5.542560 millis
+    seventeen      24.35139 millis
+
+SPEEDUP: Roughly 2.1717
+
+POOLING 6 CORES PAR GUESSES FUNCTION:
+    FULL TIME      12775309 micros
+    ------------------------------
+    wildcat        0.329450 millis
+    diabolical     11.77982 millis
+    vegard_hanssen 22.77492 millis
+    challenge      1.775890 millis
+    challenge1     66.23593 millis
+    extreme        4.998770 millis
+    seventeen      19.85725 millis
+
+SPEEDUP: Roughly 1.8136
+
+NOTE: seventeen gets better speedup with 6 cores.

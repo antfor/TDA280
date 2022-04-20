@@ -255,7 +255,7 @@ repeat(F) ->
 
 benchmarks(Puzzles) ->
     %%start_pool(erlang:system_info(schedulers) - 1),
-    start_pool(11),
+    start_pool(6),
     Res = [{Name,bm(fun()->solve(M) end)} || {Name,M} <- Puzzles],
     pool ! {stop,self()},
     receive {pool,stopped} -> Res end.
