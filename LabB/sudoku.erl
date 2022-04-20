@@ -372,7 +372,6 @@ benchmarkspool() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,benchmarkspool,[Puzzles]).
 
-    N = lazyList(Ref,F,Xs,0),
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Worker pool from demo
 %%
