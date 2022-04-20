@@ -240,6 +240,7 @@ solve_one_pool([M|Ms]) ->
     {'EXIT',no_solution} ->
 	    pool_wait_for_value(Status); %% It is not a must to actually look at the received messages
 	Solution ->
+        clear_msg_box(),
 	    Solution
     end.
 %% benchmarks
@@ -410,3 +411,10 @@ pool_wait_for_value({not_spawned, F}) ->
 %% Otherwise, wait for result.
 pool_wait_for_value({spawned, R}) ->
     receive {R, X} -> X end.
+
+clear_msg_box() ->
+    receive
+        _ -> clear_msg_box()
+    after
+        0 -> ok
+    end.
