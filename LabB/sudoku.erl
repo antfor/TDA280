@@ -268,7 +268,7 @@ parBench(Puzzles) ->
     Pids = [{Name, start_thread(fun() -> F(M) end)} || {Name,M} <- Puzzles],
     [{Name, get_value(Pid)} || {Name, Pid} <- Pids].
 
-benchmarkspar() ->
+benchmarks_part1() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,parBench,[Puzzles]).
 
@@ -368,7 +368,7 @@ pool_solve1(M) ->
 benchmarkspool(Puzzles) ->
     [{Name,bm(fun()->pool_solve(M) end)} || {Name,M} <- Puzzles].
 
-benchmarkspool() ->
+benchmarks_part2() ->
   {ok,Puzzles} = file:consult("problems.txt"),
   timer:tc(?MODULE,benchmarkspool,[Puzzles]).
 
