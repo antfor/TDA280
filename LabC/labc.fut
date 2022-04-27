@@ -26,8 +26,23 @@ entry e11 : i32 =
 entry e13 : (i32, i64) =
         process_idx s1 s2
 
+
+def segOp 't (op: t -> t -> t) (x:(t,bool)) (y:(t,bool)) : (t,bool) =
+        let f1 = x.1
+        let v1 = x.0
+        let f2 = y.1
+        let v2 = y.0
+        in (if f2 then v2 else op v1 v2, f1 || f2) 
+
+
+def segscan [n] 't (op: t -> t -> t) (ne: t) 
+                     (arr:[n](t,bool)): *[n]t =
+               map (.0) (scan (segOp op) (ne, false) arr)
+                
+
+
         
-def main [n] (xs:[n]i32) (ys:[n]i32): i32 =
-    process xs ys
+def main [n] (xs:[n](i32,bool)): [n]i32 =
+    segscan (+) 0 xs
 
 
