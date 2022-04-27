@@ -1,0 +1,6 @@
+lib
+ising
+ising.c
+ising.h
+ising-tui
+*.o
