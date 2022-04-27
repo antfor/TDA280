@@ -7,6 +7,8 @@
 -- input @ two_5000000_i32s
 -- input @ two_10000000_i32s
 
+import "lib/github.com/diku-dk/sorts/radix_sort"
+
 def s1 : []i32 = [23,45,-23,44,23,54,23,12,34,54,7,2, 4,67]
 def s2 : []i32 = [-2, 3, 4,57,34, 2, 5,56,56, 3,3,5,77,89]
 
@@ -40,20 +42,17 @@ def segscan [n] 't (op: t -> t -> t) (ne: t)
                map (.0) (scan (segOp op) (ne, false) arr)
                 
 
-
-
 def segreduce [n] 't (op: t -> t -> t) (ne: t)
                         (arr: [n](t, bool)): *[]t =
                 let vs = segscan op ne arr
                 let b = map (.1) arr 
                 let b_int = map i64.bool b
-                let b[0] = true
                 let start = rotate 1 b
                 let is_unfiltered = scan (+) 0 b_int
-                let is = map2 (\b i -> if b then i else -1) start is_unfiltered
-                let as = replicate (is_unfiltered[n-1]+1) ne
+                let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
+                let as = replicate (is_unfiltered[n-1]) ne
                 in scatter as is vs
-
+                
 
 
 def main [n] (xs:[n](i32,bool)): []i32 =
