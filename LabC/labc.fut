@@ -41,8 +41,25 @@ def segscan [n] 't (op: t -> t -> t) (ne: t)
                 
 
 
-        
-def main [n] (xs:[n](i32,bool)): [n]i32 =
-    segscan (+) 0 xs
+
+def segreduce [n] 't (op: t -> t -> t) (ne: t)
+                        (arr: [n](t, bool)): *[]t =
+                let vs = segscan op ne arr
+                let b = map (.1) arr 
+                let b_int = map i64.bool b
+                let b[0] = true
+                let start = rotate 1 b
+                let is_unfiltered = scan (+) 0 b_int
+                let is = map2 (\b i -> if b then i else -1) start is_unfiltered
+                let as = replicate (is_unfiltered[n-1]+1) ne
+                in scatter as is vs
+
+
+
+def main [n] (xs:[n](i32,bool)): []i32 =
+    segreduce (+) 0 xs
+
+--def main [n] (xs:[n](i32,bool)): [n]i32 =
+ --   segscan (+) 0 xs
 
 
