@@ -65,10 +65,26 @@ def segreduce2 [n] 't (op: t -> t -> t) (ne: t)
                 let as = replicate len ne :> *[len]t
                 in scatter as is vs :> *[len]t         
 
+-- works if radix_sort_by_key is stable
+def reduce_by_index1 'a [m] [n]
+                        (dest : *[m]a)
+                        (f : a -> a -> a) (ne : a)
+                        (is : [n]i64) (as : [n]a) : *[m]a = 
+                let in_vs = zip3 (iota m) dest (replicate m true)
+                let is_as = zip3 is as (replicate n false)
+                let npm = n + m
+                let all_unsorted = concat_to npm in_vs is_as
+                let all = radix_sort_by_key (.0) i64.num_bits i64.get_bit all_unsorted 
+                let flags = map (.2) all
+                let values = map (.1) all
+                in  segreduce f ne (zip values flags) :> *[m]a
+
+def main : [](i64,i32) =
+    radix_sort_by_key (.0) i64.num_bits i64.get_bit [(3,1),(2,2),(1,3)]
 
 
-def main [n] (xs:[n](i32,bool)): []i32 =
-    segreduce (+) 0 xs
+--def main [n] (xs:[n](i32,bool)): []i32 =
+--    segreduce (+) 0 xs
 
 --def main [n] (xs:[n](i32,bool)): [n]i32 =
  --   segscan (+) 0 xs
