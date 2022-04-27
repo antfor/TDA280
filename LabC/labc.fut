@@ -1,4 +1,3 @@
-
 -- ==
 -- input @ two_100_i32s
 -- input @ two_1000_i32s
@@ -28,7 +27,7 @@ entry e13 : (i32, i64) =
         process_idx s1 s2
 
         
-def main : i32 =
-    process s1 s2
+def main [n] (xs:[n]i32) (ys:[n]i32): i32 =
+    process xs ys
 
 

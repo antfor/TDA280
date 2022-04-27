@@ -2,3 +2,9 @@
 *~
 *.eventlog
 *.beam
+*.json
+*.c
+LabC/e11
+LabC/e13
+LabC/labc
+LabC/.ipynb_checkpoints/Graphs-checkpoint.ipynb
