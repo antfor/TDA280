@@ -52,7 +52,19 @@ def segreduce [n] 't (op: t -> t -> t) (ne: t)
                 let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
                 let as = replicate (is_unfiltered[n-1]) ne
                 in scatter as is vs
-                
+
+def segreduce2 [n] 't (op: t -> t -> t) (ne: t)
+                        (arr: [n](t, bool)): *[]t =
+                let vs = segscan op ne arr
+                let b = map (.1) arr 
+                let b_int = map i64.bool b
+                let start = rotate 1 b
+                let is_unfiltered = scan (+) 0 b_int
+                let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
+                let len = is_unfiltered[n-1]
+                let as = replicate len ne :> *[len]t
+                in scatter as is vs :> *[len]t         
+
 
 
 def main [n] (xs:[n](i32,bool)): []i32 =
