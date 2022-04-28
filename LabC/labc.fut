@@ -51,20 +51,9 @@ def segreduce [n] 't (op: t -> t -> t) (ne: t)
                 let is_unfiltered = scan (+) 0 b_int
                 let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
                 let len = if n==0 then 0 else is_unfiltered[n-1]
-                let as = replicate len ne
-                in scatter as is vs
-
-def segreduce2 [n] 't (op: t -> t -> t) (ne: t)
-                        (arr: [n](t, bool)): *[]t =
-                let vs = segscan op ne arr
-                let b = map (.1) arr 
-                let b_int = map i64.bool b
-                let start = rotate 1 b
-                let is_unfiltered = scan (+) 0 b_int
-                let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
-                let len = if n==0 then 0 else is_unfiltered[n-1]
                 let as = replicate len ne :> *[len]t
-                in scatter as is vs :> *[len]t         
+                in scatter as is vs :> *[len]t
+     
 
 -- works if radix_sort_by_key is stable
 def reduce_by_index1 'a [m] [n]
