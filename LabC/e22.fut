@@ -10,4 +10,5 @@
 import "labc"
 
 def main [n]  (vs:[n]i32) (bs:[n]bool) =
-    segreduce (+) 0 (zip vs bs)
+    let arr = zip vs bs 
+    in segreduce (+) 0 arr

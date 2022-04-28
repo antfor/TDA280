@@ -10,4 +10,5 @@ import "labc"
 
 
 def main [n] (vs:[n]i32) (bs:[n]bool) =
-    segscan (+) 0 (zip vs bs)
+    let arr = zip vs bs 
+    in segscan (+) 0 arr

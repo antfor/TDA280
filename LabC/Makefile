@@ -1,4 +1,4 @@
-.PHONY: e1 e2 e21 e22
+.PHONY: e1 e2 e21 e22 e23
 
 two_%_i32s:
 	futhark dataset -b --i32-bounds=-10000:10000 -g [$*]i32 -g [$*]i32 > $@
@@ -7,9 +7,13 @@ one_%_i32s:
 	futhark dataset -b --i32-bounds=-10000:10000 -g [$*]i32 > $@
 
 i32_%_bools:
-	futhark dataset -b --i32-bounds=-10000:10000 -g [$*]i32 -g [$*]bool  > $@
+	futhark dataset -b --i32-bounds=-10000:10000 -g [$*]i32 -g [$*]bool > $@
+
+one_%_two:
+	futhark dataset -b --i32-bounds=-10000:10000 --i64-bounds=-10:$* -g [$*]i32 -g [$*]i64 -g [$*]i32 > $@
 
 SIZES = 100 1000 10000 100000 1000000 5000000 10000000
+
 
 e11_%: $(SIZES:%two_%_i32s) e11.fut
 	futhark bench --backend=$* \
@@ -34,6 +38,11 @@ e22_%:  $(SIZES:%i32_%_bools) e22.fut
 	--json=e22_$*.json \
 	e22.fut 
 
+e23_%:  $(SIZES:%one_%_two) e23.fut
+	futhark bench --backend=$* \
+	--json=e23_$*.json \
+	e23.fut 
+
 e21_%:  $(SIZES:%i32_%_bools) e21.fut
 	futhark bench --backend=$* \
 	--json=e21_$*.json \
@@ -50,6 +59,11 @@ eb21_%:  $(SIZES:%one_%_i32s) eb21.fut
 	--json=eb21_$*.json \
 	eb21.fut 
 
+eb23_%: $(SIZES:%one_%_two) eb23.fut
+	futhark bench --backend=$* \
+	--json=eb23_$*.json \
+	eb23.fut
+
 e21:
 	make e21_c; \
 	make e21_multicore; \
@@ -64,10 +78,17 @@ e22:
 	make eb22_c; \
 	make eb22_multicore;\
 
+e23:
+	make e23_c; \
+	make e23_multicore; \
+
+	make eb23_c; \
+	make eb23_multicore;\
+
 e2:
 	make e21; \
 	make e22; \
-
+	make e23; \
 	
 
 
