@@ -62,7 +62,7 @@ def segreduce2 [n] 't (op: t -> t -> t) (ne: t)
                 let start = rotate 1 b
                 let is_unfiltered = scan (+) 0 b_int
                 let is = map2 (\b i -> if b then i-1 else -1) start is_unfiltered
-                let len = is_unfiltered[n-1]
+                let len = if n==0 then 0 else is_unfiltered[n-1]
                 let as = replicate len ne :> *[len]t
                 in scatter as is vs :> *[len]t         
 

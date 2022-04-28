@@ -26,27 +26,60 @@ module rand_i8 = uniform_int_distribution i8 rng_engine
 
 def rand = rand_f32.rand (0f32, 1f32)
 
+def rand_spin (rnge:rng_engine.rng) = 
+      let (new_rng, r) = rand_i8.rand (0i8, 1i8) rnge
+      in (new_rng, r*2-1)
+
 -- Create a new grid of a given size.  Also produce an identically
 -- sized array of RNG states.
 def random_grid (seed: i32) (h: i64) (w: i64)
               : ([h][w]rng_engine.rng, [h][w]spin) =
-  ...
+        let rng = rng_engine.rng_from_seed [seed]
+        let len = h*w
+        let rngs = rng_engine.split_rng len rng
+        let flat_grid = map rand_spin rngs 
+        let (l1,l2) = unzip flat_grid 
+        in (unflatten h w l1, unflatten h w l2)
 
 -- Compute $\Delta_e$ for each spin in the grid, using wraparound at
 -- the edges.
 def deltas [h][w] (spins: [h][w]spin): [h][w]i8 =
-  ...
+            let c = spins                     
+            let l = (rotate (-1) spins)       
+            let r = (rotate 1 spins)          
+            let u = (map (rotate (-1)) spins) 
+            let d = (map (rotate 1) spins) 
+            in map5 (map5 (\c l r u d -> 2*c*(l+r+u+d))) c l r u d
+           
 
 -- The sum of all deltas of a grid.  The result is a measure of how
 -- ordered the grid is.
 def delta_sum [h][w] (spins: [w][h]spin): i32 =
-  ...
+          let deli8 = deltas spins
+          let del   = map (map i32.i8) deli8
+          in reduce (+) 0 (map (reduce (+) 0) del) 
+
+
+def flip (abs_temp: f32) (samplerate: f32) 
+         (rng: rng_engine.rng) (deli8:i8) (c:spin) : (rng_engine.rng, spin) = 
+        let (rng_tmp, a) = rand rng
+        let (rng_new, b) = rand rng_tmp
+        let del = f32.i8 deli8
+        let b = (del < -del || b < f32.e**(-del / abs_temp))
+        let c_new = if a < samplerate && b then -c else c
+        in (rng_new, c_new)
+
 
 -- Take one step in the Ising 2D simulation.
 def step [h][w] (abs_temp: f32) (samplerate: f32)
                 (rngs: [h][w]rng_engine.rng) (spins: [h][w]spin)
               : ([h][w]rng_engine.rng, [h][w]spin) =
-  ...
+          let dels = deltas spins
+          let fliped = flip abs_temp samplerate
+          let result = map3 (map3 fliped) rngs dels spins
+          let (l1,l2) = unzip (flatten result)
+          in (unflatten h w l1, unflatten h w l2)
+
 
 -- | Just for benchmarking.
 def main (abs_temp: f32) (samplerate: f32)
