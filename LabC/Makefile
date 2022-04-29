@@ -1,4 +1,4 @@
-.PHONY: e1 e2 e21 e22 e23
+.PHONY: e1 e2 e21 e22 e23 e3 e3h e3w e3hw e3n
 
 two_%_i32s:
 	futhark dataset -b --i32-bounds=-10000:10000 -g [$*]i32 -g [$*]i32 > $@
@@ -64,6 +64,26 @@ eb23_%: $(SIZES:%one_%_two) eb23.fut
 	--json=eb23_$*.json \
 	eb23.fut
 
+e3h_%: e3h.fut
+	futhark bench --backend=$* \
+	--json=e3h_$*.json \
+	e3h.fut
+
+e3w_%: e3w.fut
+	futhark bench --backend=$* \
+	--json=e3w_$*.json \
+	e3w.fut
+
+e3hw_%: e3hw.fut
+	futhark bench --backend=$* \
+	--json=e3hw_$*.json \
+	e3hw.fut
+
+e3n_%: e3n.fut
+	futhark bench --backend=$* \
+	--json=e3n_$*.json \
+	e3n.fut
+
 e21:
 	make e21_c; \
 	make e21_multicore; \
@@ -90,7 +110,27 @@ e2:
 	make e22; \
 	make e23; \
 	
+e3h:
+	make e3h_c; \
+	make e3h_multicore; \
 
+e3w:
+	make e3w_c; \
+	make e3w_multicore; \
+
+e3hw:
+	make e3hw_c; \
+	make e3hw_multicore; \
+
+e3n:
+	make e3n_c; \
+	make e3n_multicore; \
+
+e3:
+	make e3h; \
+	make e3w; \
+	make e3hw; \
+	make e3n; \
 
 g:
 	jupyter notebook

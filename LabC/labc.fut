@@ -1,12 +1,3 @@
--- ==
--- input @ two_100_i32s
--- input @ two_1000_i32s
--- input @ two_10000_i32s
--- input @ two_100000_i32s
--- input @ two_1000000_i32s
--- input @ two_5000000_i32s
--- input @ two_10000000_i32s
-
 import "lib/github.com/diku-dk/sorts/radix_sort"
 
 def s1 : []i32 = [23,45,-23,44,23,54,23,12,34,54,7,2, 4,67]
@@ -69,14 +60,7 @@ def reduce_by_index1 'a [m] [n]
                 let values = map (.1) all
                 in  segreduce f ne (zip values flags) :> *[m]a
 
-def main : [](i64,i32) =
-    radix_sort_by_key (.0) i64.num_bits i64.get_bit [(3,1),(2,2),(1,3)]
 
 
---def main [n] (xs:[n](i32,bool)): []i32 =
---    segreduce (+) 0 xs
-
---def main [n] (xs:[n](i32,bool)): [n]i32 =
- --   segscan (+) 0 xs
 
 
