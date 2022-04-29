@@ -11,7 +11,7 @@ entry process_idx [n] (xs:[n]i32) (ys:[n]i32): (i32, i64) =
       let dif = map2 (\x y -> i32.abs(x-y)) xs ys
       let l = zip dif (iota n) 
       let f = (\(x,i) (y,j) -> if x<y then (y,j) else (x,i))
-      in reduce f (-1,0) l        
+      in reduce f (-1,-1) l        
 
 entry e11 : i32 =
         process s1 s2

@@ -82,11 +82,15 @@ def step [h][w] (abs_temp: f32) (samplerate: f32)
 
 
 -- | Just for benchmarking.
-def start (abs_temp: f32) (samplerate: f32)
+def main (abs_temp: f32) (samplerate: f32)
          (h: i64) (w: i64) (n: i32): [h][w]spin =
   (loop (rngs, spins) = random_grid 1337 h w for _i < n do
      step abs_temp samplerate rngs spins).1
 
+def start (abs_temp: f32) (samplerate: f32)
+         (h: i64) (w: i64) (n: i32): [h][w]spin =
+  (loop (rngs, spins) = random_grid 1337 h w for _i < n do
+     step abs_temp samplerate rngs spins).1
 -- ==
 -- entry: main
 -- input { 0.5f32 0.1f32 10i64 10i64 2 } auto output
