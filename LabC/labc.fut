@@ -30,7 +30,7 @@ def segOp 't (op: t -> t -> t) (x:(t,bool)) (y:(t,bool)) : (t,bool) =
 
 def segscan [n] 't (op: t -> t -> t) (ne: t) 
                      (arr:[n](t,bool)): *[n]t =
-               map (.0) (scan (segOp op) (ne, false) arr)
+               (unzip (scan (segOp op) (ne, false) arr)).0
                 
 
 def segreduce [n] 't (op: t -> t -> t) (ne: t)
@@ -44,7 +44,7 @@ def segreduce [n] 't (op: t -> t -> t) (ne: t)
                 let len = if n==0 then 0 else is_unfiltered[n-1]
                 let as = replicate len ne :> *[len]t
                 in scatter as is vs :> *[len]t
-     
+
 
 -- works if radix_sort_by_key is stable
 def reduce_by_index1 'a [m] [n]
