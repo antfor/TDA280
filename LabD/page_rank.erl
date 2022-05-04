@@ -35,6 +35,16 @@ mapd(Url,ok) ->
     [{U,1} || U <- Urls].
 
 
+page_rank_seq_ok() ->
+    page_rank_dis(),
+    ok.
+page_rank_par_ok() ->
+    page_rank_par(),
+    ok.
+page_rank_dis_ok() ->
+    page_rank_dis(),
+    ok.
+
 page_rank_dis() ->
     {ok,web} = dets:open_file(web,[{file,"web.dat"}]),
     Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
@@ -48,10 +58,10 @@ page_rank_dis() ->
 %% B %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 benchmark_seq() ->
-  timer:tc(?MODULE, page_rank , []).
+  timer:tc(?MODULE, page_rank_ok , []).
 
 benchmark_par() ->
-  timer:tc(?MODULE, page_rank_par, []).
+  timer:tc(?MODULE, page_rank_par_ok, []).
 
 benchmark_dis() ->
-  timer:tc(?MODULE, page_rank_dis, []).
+  timer:tc(?MODULE, page_rank_dis_ok, []).
