@@ -8,7 +8,12 @@
 %% Crawl from a URL, following links to depth D.
 %% Before calling this function, the inets service must
 %% be started using inets:start().
-crawl(Url,D) ->
+crawl(Url,D)->
+    R = crawl1(Url,D),
+    io:format("~n~n Num pages: ~p ~n~n", [length(R)]),
+    R.
+
+crawl1(Url,D) ->
     dets:open_file(web,[{file,"web.dat"}]),
     Pages = follow(D,[{Url,undefined}]),
     [{U,Body} || {U,Body} <- Pages,
@@ -84,7 +89,7 @@ valid(Url) ->
   not lists:member($#,Url) andalso length(Url) < 256.
 
 %% We encounter some URLs with the wrong encoding of unicode
-%% characters. This is an attempt to fix some of them. 
+%% characters. This is an attempt to fix some of them.
 convert_unicode(L) ->
   case unicode:characters_to_list(list_to_binary(L)) of
     Conversion when is_list(Conversion) ->
@@ -92,4 +97,3 @@ convert_unicode(L) ->
     _ ->
       L
   end.
-  
