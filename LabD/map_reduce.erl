@@ -112,8 +112,9 @@ map_reduce_dis(Map,M,Reduce,R,Input) ->
     Work_Split = split_into(Num_Nodes,Input),
     Zip_Map = lists:zip(Nodes,Work_Split),
 
-    Mappedss =
-        [ rpc:call(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map], % M/Num_Nodes
+    %Mappedss =[ rpc:call(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map], % M/Num_Nodes
+    RequestIdsM = [ erpc:send_request(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map], % M/Num_Nodes
+    Mappedss   = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsM],
 
     Mappeds = lists:concat(Mappedss),
     io:format(user,"Map phase complete\n",[]),
@@ -121,8 +122,11 @@ map_reduce_dis(Map,M,Reduce,R,Input) ->
 
     Is_Split = split_into(Num_Nodes, lists:seq(0,R-1)),
     Zip_Reduce = lists:zip(Nodes,Is_Split),
-    Reducedss =
-        [ rpc:call(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
+
+    %Reducedss = [ rpc:call(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
+    RequestIdsR = [ erpc:send_request(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
+    Reducedss = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsR],  
+
 
     Reduceds = lists:concat(Reducedss),
     io:format(user,"Reduce phase complete\n",[]),
