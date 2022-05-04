@@ -27,7 +27,7 @@ page_rank_par() ->
     map_reduce:map_reduce_par(fun map/2, 32, fun reduce/2, 32,
 			      [{Url,ok} || Url <- Urls]).
 
-
+%% 1 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 mapd(Url,ok) ->
     {ok,web} = dets:open_file(web,[{file,"web.dat"}]),
     [{Url,Body}] = dets:lookup(web,Url),
@@ -40,3 +40,18 @@ page_rank_dis() ->
     Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
     map_reduce:map_reduce_dis(fun mapd/2, 32, fun reduce/2, 32,
 			      [{Url,ok} || Url <- Urls]).
+
+
+%% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% B %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+benchmark_seq() ->
+  timer:tc(?MODULE, page_rank , []).
+
+benchmark_par() ->
+  timer:tc(?MODULE, page_rank_par, []).
+
+benchmark_dis() ->
+  timer:tc(?MODULE, page_rank_dis, []).
