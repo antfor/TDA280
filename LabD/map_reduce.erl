@@ -19,7 +19,7 @@ map_reduce_seq(Map,Reduce,Input) ->
     Mapped = [{K2,V2}
 	      || {K,V} <- Input,
 		 {K2,V2} <- Map(K,V)],
-    io:format("Map phase complete\n"),
+    io:format(user, "Map phase complete\n", []),
     reduce_seq(Reduce,Mapped).
 
 reduce_seq(Reduce,KVs) ->
@@ -44,13 +44,13 @@ map_reduce_par(Map,M,Reduce,R,Input) ->
 	 || Split <- Splits],
     Mappeds =
 	[receive {Pid,L} -> L end || Pid <- Mappers],
-    io:format("Map phase complete\n"),
+    io:format(user, "Map phase complete\n", []),
     Reducers =
 	[spawn_reducer(Parent,Reduce,I,Mappeds)
 	 || I <- lists:seq(0,R-1)],
     Reduceds =
 	[receive {Pid,L} -> L end || Pid <- Reducers],
-    io:format("Reduce phase complete\n"),
+    io:format(user, "Reduce phase complete\n", []),
     lists:sort(lists:flatten(Reduceds)).
 
 spawn_mapper(Parent,Map,R,Split) ->
@@ -58,7 +58,7 @@ spawn_mapper(Parent,Map,R,Split) ->
 			Mapped = [{erlang:phash2(K2,R),{K2,V2}}
 				  || {K,V} <- Split,
 				     {K2,V2} <- Map(K,V)],
-                        io:format("."),
+                        io:format(user, ".", []),
 			Parent ! {self(),group(lists:sort(Mapped))}
 		end).
 
@@ -78,7 +78,7 @@ spawn_reducer(Parent,Reduce,I,Mappeds) ->
 		 I==J,
 		 KV <- KVs],
     spawn_link(fun() -> Result = reduce_seq(Reduce,Inputs),
-                        io:format("."),
+                        io:format(user, ".", []),
                         Parent ! {self(),Result} end).
 
 %% 1 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,7 +125,7 @@ map_reduce_dis(Map,M,Reduce,R,Input) ->
 
     %Reducedss = [ rpc:call(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
     RequestIdsR = [ erpc:send_request(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
-    Reducedss = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsR],  
+    Reducedss = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsR],
 
 
     Reduceds = lists:concat(Reducedss),
