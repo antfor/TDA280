@@ -87,8 +87,7 @@ map_par(Map,M,R,Input) ->
     io:format(user,"Map phase started\n",[]),
     Parent = self(),
     Splits = split_into(M,Input),
-    Mappers =
-	[spawn_mapper(Parent,Map,R,Split) || Split <- Splits],
+    Mappers = [spawn_mapper(Parent,Map,R,Split) || Split <- Splits],
     Mappeds = [receive {Pid,L} -> L end || Pid <- Mappers],
     io:format(user,"Map phase complete\n",[]),
     Mappeds.
@@ -96,24 +95,21 @@ map_par(Map,M,R,Input) ->
 reduce_par(Mappeds,Reduce,Is) ->
     io:format(user,"Reduce phase started\n",[]),
     Parent = self(),
-    Reducers =
-	[spawn_reducer(Parent,Reduce,I,Mappeds)
-	 || I <- Is],
-    Reduceds =
-	[receive {Pid,L} -> L end || Pid <- Reducers],
+    Reducers = [spawn_reducer(Parent,Reduce,I,Mappeds) || I <- Is],
+    Reduceds = [receive {Pid,L} -> L end || Pid <- Reducers],
     io:format(user,"Reduce phase complete\n",[]),
     lists:sort(lists:flatten(Reduceds)).
 
 
 map_reduce_dis(Map,M,Reduce,R,Input) ->
+    io:format(user,"Start, number of nodes: ",[]),
     Nodes = nodes() ++ [node()],
     Num_Nodes = length(Nodes),
     print(Num_Nodes),
     Work_Split = split_into(Num_Nodes,Input),
     Zip_Map = lists:zip(Nodes,Work_Split),
 
-    %Mappedss =[ rpc:call(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map], % M/Num_Nodes
-    RequestIdsM = [ erpc:send_request(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map], % M/Num_Nodes
+    RequestIdsM = [ erpc:send_request(Node,map_reduce,map_par,[Map,M,R,Work]) || {Node,Work} <- Zip_Map],
     Mappedss   = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsM],
 
     Mappeds = lists:concat(Mappedss),
@@ -123,7 +119,7 @@ map_reduce_dis(Map,M,Reduce,R,Input) ->
     Is_Split = split_into(Num_Nodes, lists:seq(0,R-1)),
     Zip_Reduce = lists:zip(Nodes,Is_Split),
 
-    %Reducedss = [ rpc:call(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
+
     RequestIdsR = [ erpc:send_request(Node,map_reduce,reduce_par,[Mappeds,Reduce,Is]) || {Node,Is} <- Zip_Reduce],
     Reducedss = [ erpc:receive_response(RequestId) || RequestId <- RequestIdsR],
 
@@ -133,6 +129,100 @@ map_reduce_dis(Map,M,Reduce,R,Input) ->
     lists:sort(lists:flatten(Reduceds)).
 
 %% 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+split(N, Xs) when length(Xs) < N -> {Xs,[]};
+split(N, Xs) -> lists:split(N,Xs).
+
+wait_for_response(Work, Nodes, Ids, R, F, M)->
+    [{RequestId,Node} | NewIds] = Ids,
+    case erpc:wait_response(RequestId) of
+        {response, Result} -> worker_pool(Work, Nodes ++ [Node], NewIds, R ++ [Result], F, M);
+        no_response        -> worker_pool(Work, Nodes, NewIds ++ [{RequestId,Node}], R, F, M)
+    end.
+
+worker_pool([],       _,  [], R, _, _) -> R;
+worker_pool([],   Nodes, Ids, R, F, Chunk) ->
+    wait_for_response([], Nodes, Ids, R, F, Chunk);
+worker_pool(Work,    [], Ids, R, F, Chunk) ->
+    wait_for_response(Work, [], Ids, R, F, Chunk);
+worker_pool(Work, Nodes, Ids, R, F, Chunk) ->
+    [Node | Idle] = Nodes,
+    {Job, WorkLeft} = split(Chunk,Work),
+    Id = erpc:send_request(Node, fun() -> F(Job) end),    %% cast and send msg instead
+    NewIds = Ids ++ [{Id,Node}],
+    worker_pool(WorkLeft, Idle, NewIds, R, F, Chunk).
+
+%%
+
+map_reduce_pool(Map,M,Reduce,R,Input) ->
+    io:format(user,"Start, number of nodes: ",[]),
+    Nodes = [node() | nodes()],
+    Num_Nodes = length(Nodes),
+    print(Num_Nodes),
+    FM = fun(W) -> map_par(Map, M, R, W) end,
+    Mappedss = worker_pool(Input, Nodes, [], [], FM, M * 4),
+
+    Mappeds = lists:concat(Mappedss),
+    io:format(user,"Map phase complete\n",[]),
+
+
+    Is =  lists:seq(0,R-1),
+    FR = fun(W) -> reduce_par(Mappeds, Reduce, W) end,
+    Reducedss = worker_pool(Is, Nodes, [], [], FR, R div Num_Nodes),
+
+
+    Reduceds = lists:concat(Reducedss),
+    io:format(user,"Reduce phase complete\n",[]),
+    lists:sort(lists:flatten(Reduceds)).
+
+%% 2.1 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+worker_pool2(Work,F,Chunk) -> worker_pool21(Work, F, Chunk, [node() | nodes()], [], []).
+
+
+wait_for_response2(Work, F, Chunk, Nodes, Refs, Result) ->
+    receive
+        {result, {Ref,Node}, R} ->                                                                          %% todo (lists:member({Ref,Node}, Refs))
+            worker_pool21(Work, F, Chunk, Nodes ++ [Node], Refs -- [{Ref,Node}], Result ++ [R]);
+
+        X -> print({"error response",X})
+    end.
+
+worker_pool21([], _, _, _, [], Result) -> Result;
+worker_pool21([], F, Chunk, Nodes, Refs, Result) ->
+    wait_for_response2([], F, Chunk, Nodes, Refs, Result);
+worker_pool21(Work, F, Chunk, [], Refs, Result) ->
+    wait_for_response2(Work, F, Chunk, [], Refs, Result);
+worker_pool21(Work, F, Chunk, Nodes, Refs, Result) ->
+    [Node | Idle] = Nodes,
+    {Job, WorkLeft} = split(Chunk,Work),
+    Parent = self(),
+    Ref = {make_ref(), Node},
+    erpc:cast(Node, fun() -> Parent ! {result, Ref, F(Job)} end),
+    NewRefs = Refs ++ [Ref],
+    worker_pool21(WorkLeft, F, Chunk, Idle, NewRefs, Result).
+
+
+map_reduce_pool2(Map,M,Reduce,R,Input) ->
+    io:format(user,"Start, number of nodes: ",[]),
+    Nodes = [node() | nodes()],
+    Num_Nodes = length(Nodes),
+    print(Num_Nodes),
+    FM = fun(W) -> map_par(Map, M, R, W) end,
+    Mappedss = worker_pool2(Input, FM, M * 4),
+
+    Mappeds = lists:concat(Mappedss),
+    io:format(user,"Map phase complete\n",[]),
+
+
+    Is =  lists:seq(0,R-1),
+    FR = fun(W) -> reduce_par(Mappeds, Reduce, W) end,
+    Reducedss = worker_pool2(Is, FR, R div Num_Nodes),
+
+
+    Reduceds = lists:concat(Reducedss),
+    io:format(user,"Reduce phase complete\n",[]),
+    lists:sort(lists:flatten(Reduceds)).
+
 %% 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Misc %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
