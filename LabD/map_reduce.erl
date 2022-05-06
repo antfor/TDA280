@@ -15,6 +15,7 @@
 %% values, and generates in turn a list of key-value pairs. These are
 %% the result.
 
+%% MAP REDUCE SEQ
 map_reduce_seq(Map,Reduce,Input) ->
     Mapped = [{K2,V2}
 	      || {K,V} <- Input,
@@ -35,6 +36,8 @@ group(K,Vs,[{K,V}|Rest]) ->
     group(K,[V|Vs],Rest);
 group(K,Vs,Rest) ->
     [{K,lists:reverse(Vs)}|group(Rest)].
+
+%% MAP REDUCE PAR
 
 map_reduce_par(Map,M,Reduce,R,Input) ->
     Parent = self(),
@@ -81,3 +84,38 @@ spawn_reducer(Parent,Reduce,I,Mappeds) ->
                         io:format("."),
                         Parent ! {self(),Result} end).
 
+%% DISTRIBUTED MAP REDUCE
+map_reduce_dist(Map, M, Reduce, R, Input) ->
+    Nodes  = nodes(), %% Use all nodes except this one
+    All_Splits = split_into(M, Input),
+    Dist_Splits = split_into(length(Nodes), All_Splits),
+    [spawn_link(Node, fun() -> spawn_mapper_dist(node(), Map, R, Splits) end) 
+        || {Node, Splits} <- lists:zip(Nodes, Dist_Splits)],
+    Mappeds = lists:concat([receive {Node,Mapped} -> Mapped end || Node <- Nodes]),
+    io:format("Map phase complete\n"),
+
+    Hash_Splits = split_into(length(nodes), lists:seq(0, R-1)),
+    [spawn_link(Node, fun() -> spawn_reduce_dist(node(), Reduce, Indices, Mappeds) end) 
+        || {Node, Indices} <- lists:zip(Nodes, Hash_Splits)],
+    Reduceds = lists:concat([receive {Node,Reduced} -> Reduced end || Node <- Nodes]),
+    io:format("Reduce phase complete\n"),
+    lists:sort(lists:flatten(Reduceds)).
+
+spawn_reduce_dist(Master,Reduce,Indices,Mappeds) ->
+    Parent = self(),
+    Reducers =
+    [spawn_reducer(Parent,Reduce,I,Mappeds) 
+	    || I <- Indices],
+    Reduceds = 
+        [receive {Pid,L} -> L end || Pid <- Reducers],
+    Master ! {node(), Reduceds}.
+    
+
+spawn_mapper_dist(Master, Map, R, Splits) ->
+    Parent = self(),
+    Mappers = 
+	    [spawn_mapper(Parent,Map,R,Split)
+	        || Split <- Splits],
+    Mappeds = 
+	    [receive {Pid,L} -> L end || Pid <- Mappers],
+    Master ! {node(), Mappeds}.
