@@ -55,11 +55,17 @@ page_rank_pool2() ->
   Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
   map_reduce:map_reduce_pool2(fun mapd/2, 32, fun reduce/2, 32,
 			      [{Url,ok} || Url <- Urls]).
+
+page_rank_pool3() ->
+    {ok,web} = dets:open_file(web,[{file,"web.dat"}]),
+    Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
+    map_reduce:map_reduce_pool3(fun mapd/2, 32, fun reduce/2, 32,
+    			      [{Url,ok} || Url <- Urls]).
 %% 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% B %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 page_rank_seq_ok() ->
-    page_rank_dis(),
+    page_rank(),
     ok.
 page_rank_par_ok() ->
     page_rank_par(),
@@ -76,8 +82,12 @@ page_rank_pool2_ok() ->
     page_rank_pool2(),
     ok.
 
+page_rank_pool3_ok() ->
+    page_rank_pool3(),
+    ok.
+
 benchmark_seq() ->
-  timer:tc(?MODULE, page_rank_ok , []).
+  timer:tc(?MODULE, page_rank_seq_ok , []).
 
 benchmark_par() ->
   timer:tc(?MODULE, page_rank_par_ok, []).
@@ -90,3 +100,6 @@ benchmark_pool() ->
 
 benchmark_pool2() ->
   timer:tc(?MODULE, page_rank_pool2_ok, []).
+
+benchmark_pool3() ->
+  timer:tc(?MODULE, page_rank_pool3_ok, []).
