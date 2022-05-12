@@ -91,7 +91,7 @@ map_reduce_dist(Map,M,Reduce,R,Input) ->
     Node_Splits = split_into(Node_Amount, Input),
     
     Parent = self(),
-
+    
     Mappers = [spawn_mapper_node(Parent, Node, Map, M, R, Split)
                 || {Node, Split} <- lists:zip (Nodes, Node_Splits)],
     Mappeds = lists:concat([receive {Pid, L} -> L end || Pid <- Mappers]),
@@ -128,94 +128,112 @@ map_reduce_dist_pool(Map,M,Reduce,R,Input) ->
     Nodes = nodes() ++ [node()],
     Worker_Pool = start_worker_pool(Nodes),
 
-    Splits = split_into(M, Input),
-    Map_Work = [fun() -> map_dist(Map, R, Split) end || Split <- Splits],
+    Map_Splits = split_into(M, Input),
+    Map_Work = [fun() -> map_dist(Map, R, Split) end || Split <- Map_Splits],
+
     Worker_Pool ! {do_work, Map_Work},
-    Mappeds = receive {retrieve_res, Res} -> Res end,
+    Mappeds = receive {retrieve_res, Ma} -> Ma end,
     io:format("Map phase complete\n"),
-    Mappeds.
+    
+    Reduce_Splits = [[KV || Mapped <- Mappeds,
+                            {J, KVs} <-Mapped,
+                            I == J,
+                            KV <- KVs] 
+                        || I <- lists:seq(1, R - 1)],
+    Reduce_Splits,
+    Reduce_Work = [fun() -> reduce_dist(Reduce, Split) end || Split <- Reduce_Splits],
+
+    Worker_Pool ! {do_work, Reduce_Work},
+    Reduceds = receive {retrieve_res, Re} -> Re end,
+    io:format("Reduce phase complete\n"),
+    lists:sort(lists:flatten(Reduceds)).
 
 map_dist(Map, R, Split) ->
-    Mapped = [{erlang:phash2(K2, R), {K2, V2}}
-                || {K, V} <- Split,
-                   {K2, V2} <- Map(K, V)],
+    Mapped = [{erlang:phash2(K2,R),{K2,V2}}
+				  || {K,V} <- Split,
+				     {K2,V2} <- Map(K,V)],
     io:format("."),
-    Mapped.
+	group(lists:sort(Mapped)).
+
+reduce_dist(Reduce, Split) ->
+    Reduced = reduce_seq(Reduce, Split),
+    io:format("."),
+    Reduced.
 
 start_worker_pool(Nodes) ->
-    Parent = self(),
+    Main_Proc = self(),
     spawn_link(
         fun() ->
-            Node_PIDs = [spawn_node_worker(Node) || Node <- Nodes],
-            worker_pool(passive, Parent, Node_PIDs, [])
+            Node_Procs = [spawn_node_worker(Node) || Node <- Nodes],
+            worker_pool(passive, Main_Proc, Node_Procs, [])
         end).
 
-worker_pool(passive, Parent, Node_PIDs, []) ->
+worker_pool(passive, Main_Proc, Node_Procs, []) ->
     receive
         {do_work, Work} ->
-            [Node ! {start} || Node <- Node_PIDs],
-            worker_pool(active, Parent, Node_PIDs, Work)
+            [Node_Proc ! {start} || Node_Proc <- Node_Procs],
+            worker_pool(active, Main_Proc, Node_Procs, Work)
     end;
-worker_pool(active, Parent, Node_PIDs, [W|Ws]) ->
+worker_pool(active, Main_Proc, Node_Procs, [W|Ws]) ->
     receive
-        {request_work, Node_PID} ->
-            Node_PID ! {do_work, W},
-            worker_pool(active, Parent, Node_PIDs, Ws)
+        {request_work, Node_Proc} ->
+            Node_Proc ! {do_work, W},
+            worker_pool(active, Main_Proc, Node_Procs, Ws)
     end;
-worker_pool(active, Parent, Node_PIDs, []) ->
-    [receive {request_work, Node_PID} -> Node_PID ! {no_more_work} end 
-              || Node_PID <- Node_PIDs],
-    Result = lists:concat([receive {result, Node_PID, Work_Res} -> Work_Res end || Node_PID <- Node_PIDs]),
-    Parent ! {retrieve_res, Result},
-    worker_pool(passive, Parent, Node_PIDs, []).
+worker_pool(active, Main_Proc, Node_Procs, []) ->
+    [receive {request_work, Node_Proc} -> Node_Proc ! {no_more_work} end 
+              || Node_Proc <- Node_Procs],
+    Result = lists:concat([receive {result, Node_Proc, Work_Res} -> Work_Res end || Node_Proc <- Node_Procs]),
+    Main_Proc ! {retrieve_res, Result},
+    worker_pool(passive, Main_Proc, Node_Procs, []).
 
 spawn_node_worker(Node) ->
-    Parent = self(),
+    Worker_Pool_Proc = self(),
     spawn_link(Node,
             fun() ->
-                Thread_Amount = erlang:system_info(schedulers - 1),
-                Threads = [spawn_link(Node, fun() -> thread_worker(self()) end) 
-                            || lists:seq(1, Thread_Amount)],
-                node_worker(passive, Parent, Node, Threads, Threads, [])
+                Node_Proc = self(),
+                Worker_Amount = erlang:system_info(schedulers) - 2, % One master thread and one thread left to os
+                Threads = [spawn_link(Node, fun() -> thread_worker(Node_Proc) end) 
+                            || _ <- lists:seq(1, Worker_Amount)],
+                node_worker(passive, Worker_Pool_Proc, Threads, Threads, [])
             end
         ).
 
-node_worker(passive, Parent, Node, Threads, All_Threads, Work_Res) ->
+node_worker(passive, Worker_Pool_Proc, Threads, All_Threads, Work_Res) ->
     receive
         {start} ->
-            node_worker(active, Parent, Node, Threads, All_Threads, Work_Res)
+            node_worker(active, Worker_Pool_Proc, Threads, All_Threads, Work_Res)
     end;
-node_worker(active, Parent, Node, [], All_Threads, Work_Res) ->
+node_worker(active, Worker_Pool_Proc, [], All_Threads, Work_Res) ->
     receive 
-        {work_done, T, Ref, Res} ->
-            node_worker(active, Parent, Node, [T], All_Threads, [Res|Work_Res])
+        {work_done, T, Res} ->
+            node_worker(active, Worker_Pool_Proc, [T], All_Threads, [Res|Work_Res])
     end;
-node_worker(active, Parent, Node, [T|Ts], All_Threads, Work_Res) ->
-    Parent ! {request_work, self()},
+node_worker(active, Worker_Pool_Proc, [T|Ts], All_Threads, Work_Res) ->
+    Worker_Pool_Proc ! {request_work, self()},
     receive
         {do_work, Work} ->
-            Ref = make_ref(),
-            T ! {do_work, Ref, Work},
-            node_worker(active, Parent, Node, Ts, All_Threads, Work_Res);
-        {no_more_work} -> 
-            node_worker(collecting_res, Parent, Node, [T|Ts], All_Threads, Work_Res)
+            T ! {do_work, Work},
+            node_worker(active, Worker_Pool_Proc, Ts, All_Threads, Work_Res);
+        {no_more_work} ->
+            node_worker(collecting_res, Worker_Pool_Proc, [T|Ts], All_Threads, Work_Res)
     end;
-node_worker(collecting_res, Parent, Node, Threads, All_Threads, Work_Res) ->
+node_worker(collecting_res, Worker_Pool_Proc, Threads, All_Threads, Work_Res) ->
     if 
         length(Threads) == length(All_Threads) ->
-            Parent ! {result, Node, Work_Res},
-            node_worker(passive, Parent, Node, Threads, All_Threads, []);
+            Worker_Pool_Proc ! {result, self(), Work_Res},
+            node_worker(passive, Worker_Pool_Proc, Threads, All_Threads, []);
         true ->
             receive 
-                {work_done, T, Ref, Res} ->
-                    node_worker(collecting_res, Parent, Node, [T|Threads], All_Threads, [Res|Work_Res])
+                {work_done, T, Res} ->
+                    node_worker(collecting_res, Worker_Pool_Proc, [T|Threads], All_Threads, [Res|Work_Res])
             end
     end.    
             
-thread_worker(Master_Thread) ->
+thread_worker(Owner_Proc) ->
     receive
-        {do_work, Ref, Work} ->
+        {do_work, Work} ->
             Res = Work(),
-            Master_Thread ! {work_done, self(), Ref, Res},
-            thread_worker(Master_Thread)
+            Owner_Proc ! {work_done, self(), Res},
+            thread_worker(Owner_Proc)
     end.
