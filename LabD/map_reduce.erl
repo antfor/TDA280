@@ -208,7 +208,7 @@ map_reduce_pool2(Map,M,Reduce,R,Input) ->
     Num_Nodes = length(Nodes),
     print(Num_Nodes),
     FM = fun(W) -> map_par(Map, M, R, W) end,
-    Mappedss = worker_pool2(Input, FM, M * 4),
+    Mappedss = worker_pool2(Input, FM, M *4),
 
     Mappeds = lists:concat(Mappedss),
     io:format(user,"Map phase complete\n",[]),
@@ -216,7 +216,7 @@ map_reduce_pool2(Map,M,Reduce,R,Input) ->
 
     Is =  lists:seq(0,R-1),
     FR = fun(W) -> reduce_par(Mappeds, Reduce, W) end,
-    Reducedss = worker_pool2(Is, FR, 4),
+    Reducedss = worker_pool2(Is, FR, R),
 
 
     Reduceds = lists:concat(Reducedss),
@@ -264,7 +264,6 @@ wait_response(Args, Id, Refs, Results) ->
         {result, Ref, Result} ->
             RefsNew = lists:keydelete(Ref,2,Refs),
             wait_response(Args, Id, RefsNew, [Result | Results] )
-
     end.
 
 
@@ -277,6 +276,8 @@ worker(F, Main, Id) ->
             worker(F, Main, Id);
         done -> unregister(worker),ok
     end.
+
+
 
 
 map_reduce_pool3(Map,M,Reduce,R,Input) ->
@@ -306,7 +307,195 @@ map_reduce_pool3(Map,M,Reduce,R,Input) ->
     unregister(main),
     io:format(user,"Reduce phase complete\n",[]),
     lists:sort(lists:flatten(Reduceds)).
+
+
+%% 2.4 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+worker_pool4(F, Args) ->
+    Ref = make_ref(),
+    Nodes = [node() | nodes()],
+    [ monitor_node(Node, true) || Node <- Nodes],
+    Main = node(),
+    [spawn_link(Node, fun()-> register(worker,self()), nodeWorker(F, {main,Main},Ref) end) || Node <- Nodes],
+    Result = wait_response(Args, Ref, [], []),
+    [{worker,Node} ! done || Node <- Nodes],
+    flush_msg(),
+    Result.
+
+map_seq(Map,Input) ->
+    io:format(user,".",[]),
+    [{K2,V2}
+	      || {K,V} <- Input,
+		 {K2,V2} <- Map(K,V)].
+
+
+reduce_seq(Reduce,I,Mappeds) ->
+    io:format(user,".",[]),
+    Inputs = [KV
+	      || Mapped <- Mappeds,
+		 {J,KVs} <- Mapped,
+		 I==J,
+		 KV <- KVs],
+         reduce_seq(Reduce,Inputs).
+
+
+
+nodeWorker(F, Main, Id) ->
+    Parent = self(),
+    N = erlang:system_info(schedulers),
+    Workers = [spawn_link(threadWorker(F,Parent)) || _ <- lists:seq(1,N)],
+    work(F,Main,Id,Workers).
+
+
+zip(_,[]) -> [];
+zip([],_) -> [];
+zip([X|Xs],[Y|Ys]) -> [{X,Y} | zip(Xs,Ys)].
+
+
+work(F, Main, Id, Workers) ->
+    Main ! {employ_me, Id, node() ,{worker, node()}},
+    receive
+        {job, Arg, Ref} ->
+
+            Args = split_into(length(Workers),Arg),
+            Zip = zip(Workers,Args),
+            [ Pid ! {job, Job } || {Pid, Job} <- Zip],
+            Result = [receive {result, R} -> R end || _ <- Workers],
+
+            Main ! {result, Ref, Result},
+            worker(F, Main, Id);
+        done ->
+             unregister(worker),
+             [Pid ! done || Pid <- Workers],
+             ok
+    end.
+
+threadWorker(F,Parent) ->
+    receive
+        {job, Arg} ->
+            Parent ! {result, F(Arg)},
+            threadWorker(F,Parent);
+        done -> ok
+    end.
+
+map_reduce_pool4(Map,M,Reduce,R,Input) ->
+    io:format(user,"Start, number of nodes: ",[]),
+    Nodes = [node() | nodes()],
+    Num_Nodes = length(Nodes),
+    print(Num_Nodes),
+
+    register(main, self()),
+    MChunk = 4*M,
+    InputChunk = split_into(length(Input) div MChunk, Input),
+    FM = fun(W) -> map_seq(Map, W) end,
+    Mappedss = worker_pool4(FM, InputChunk),
+
+    Mappeds = lists:concat(Mappedss),
+    io:format(user,"Map phase complete\n",[]),
+
+
+    Is =  lists:seq(0,R-1),
+    IChunk = 4,
+    IsChunk = split_into(R div IChunk, Is),
+    FR = fun(Ws) -> [reduce_seq(Mappeds, Reduce, W) || W <- Ws] end,
+    Reducedss = worker_pool4(FR, IsChunk),
+
+
+    Reduceds = lists:concat(Reducedss),
+    unregister(main),
+    io:format(user,"Reduce phase complete\n",[]),
+    lists:sort(lists:flatten(Reduceds)).
 %% 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+worker_pool_fault(F, Args) ->
+    Ref = make_ref(),
+    Nodes = [node() | nodes()],
+    [ monitor_node(Node, true) || Node <- Nodes],
+    Main = node(),
+    [ spawn(Node, fun()-> register(worker,self()), worker(F, {main,Main},Ref) end) || Node <- Nodes],
+    Result = wait_response_fault(Args, Ref, [], []),
+    [{worker,Node} ! done || Node <- Nodes],
+    flush_msg(),
+    Result.
+
+
+nodedown(Node, Args, Id, Refs, Results) ->
+        print("hej"),
+        print(Node),
+        case lists:keyfind(Node, 1, Refs) of
+            false ->
+                 wait_response_fault(Args, Id ,Refs, Results);
+            {Node,Ref,Arg} ->
+                print("då"),
+                 RefsNew = lists:keydelete(Ref, 2, Refs),
+                 nodedown(Node, [Arg | Args], Id, RefsNew, Results)
+                 %wait_response_fault([Arg | Args], Id ,RefsNew, Results)
+        end.
+
+
+wait_response_fault([], _ ,[], Results) -> Results;
+wait_response_fault([],Id,Refs, Results) ->
+    receive
+        {result, Ref, Result} ->
+            RefsNew = lists:keydelete(Ref,2,Refs),
+            wait_response_fault([], Id, RefsNew, [Result | Results]);
+
+        {nodedown, Node} -> nodedown(Node, [], Id, Refs, Results);
+        {noconnection, Node} -> nodedown(Node, [], Id, Refs, Results)
+
+    end;
+wait_response_fault(Args, Id, Refs, Results) ->
+    receive
+        {employ_me, Id , Node, Pid} ->
+            [Arg | ArgsNew] = Args,
+            Ref = make_ref(),
+            Pid ! {job, Arg ,Ref},
+            wait_response_fault(ArgsNew, Id, [{Node, Ref, Arg} | Refs], Results);
+
+        {result, Ref, Result} ->
+            RefsNew = lists:keydelete(Ref,2,Refs),
+            wait_response_fault(Args, Id, RefsNew, [Result | Results] );
+
+        {nodedown, Node} -> nodedown(Node, Args, Id, Refs, Results);
+        {noconnection, Node} -> nodedown(Node, Args, Id, Refs, Results)
+
+    end.
+
+
+
+
+map_reduce_fault(Map,M,Reduce,R,Input) ->
+    io:format(user,"Start, number of nodes: ",[]),
+    Nodes = [node() | nodes()],
+    Num_Nodes = length(Nodes),
+    print(Num_Nodes),
+
+    register(main, self()),
+    MChunk = 4*M,
+    InputChunk = split_into(length(Input) div MChunk, Input),
+    FM = fun(W) -> map_par(Map, M, R, W) end,
+    Mappedss = worker_pool_fault(FM, InputChunk),
+
+    Mappeds = lists:concat(Mappedss),
+    io:format(user,"Map phase complete\n",[]),
+
+
+    Is =  lists:seq(0,R-1),
+    IChunk = 4,
+    IsChunk = split_into(R div IChunk, Is),
+    FR = fun(W) -> reduce_par(Mappeds, Reduce, W) end,
+    Reducedss = worker_pool_fault(FR, IsChunk),
+
+
+    Reduceds = lists:concat(Reducedss),
+    unregister(main),
+    io:format(user,"Reduce phase complete\n",[]),
+    lists:sort(lists:flatten(Reduceds)).
+
+
+
 
 %% Misc %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
