@@ -151,12 +151,12 @@ map_dist(Map, R, Split) ->
     Mapped = [{erlang:phash2(K2,R),{K2,V2}}
 				  || {K,V} <- Split,
 				     {K2,V2} <- Map(K,V)],
-    io:format("."),
+    io:format(user, ".", []),
 	group(lists:sort(Mapped)).
 
 reduce_dist(Reduce, Split) ->
     Reduced = reduce_seq(Reduce, Split),
-    io:format("."),
+    io:format(user, ".", []),
     Reduced.
 
 start_worker_pool(Nodes) ->
@@ -273,7 +273,7 @@ execute_work(Worker_Pool, Work, Curr_Result) ->
 
 start_worker_pool_f(Nodes) ->
     Main_Proc = self(),
-    spawn_link(
+    spawn(
         fun() ->
             Node_Procs = [{Node, spawn_node_worker_f(Node)} || Node <- Nodes],
             [monitor_node(Node, true) || Node <- Nodes],
@@ -297,25 +297,25 @@ worker_pool_f(active, Main_Proc, Node_Procs, Sent_Work, [W|Ws]) ->
             worker_pool_f(active, Main_Proc, Node_Procs, Sent_Work_Upd, Ws);
         
         {nodedown, Node} ->
-            io:format("Node ~p went offline ~n.", [Node]),
             {_, Node_PID} = lists:keyfind(Node, 1, Node_Procs),
             {_, Work_List} = lists:keyfind(Node_PID, 1, Sent_Work),
             Work_Upd = lists:append(Work_List, [W|Ws]),
             Sent_Work_Upd = lists:keydelete(Node_PID, 1, Sent_Work),
-            worker_pool_f(active, Main_Proc, Node_Procs, Sent_Work_Upd, Work_Upd)
+            Node_Procs_Upd = lists:keydelete(Node_PID, 2, Node_Procs),
+            worker_pool_f(active, Main_Proc, Node_Procs_Upd, Sent_Work_Upd, Work_Upd)
     end;
 worker_pool_f(active, Main_Proc, Node_Procs, Sent_Work, []) ->
-    Result = get_node_results(Node_Procs, Sent_Work),
-    Main_Proc ! {retrieve_res, Result},
-    worker_pool_f(passive, Main_Proc, Node_Procs, [], []).
+    {Res, Leftover, Node_Procs_Upd} = get_node_results(Node_Procs, Sent_Work),
+    Main_Proc ! {retrieve_res, {Res, Leftover}},
+    worker_pool_f(passive, Main_Proc, Node_Procs_Upd, [], []).
 
 get_node_results (Node_Procs, Sent_Work) ->
-    get_node_results(Node_Procs, [], Sent_Work).
+    get_node_results(Node_Procs, Node_Procs, [], Sent_Work).
 
-get_node_results([], Result, Sent_Work) ->
+get_node_results([], All_Node_Procs, Result, Sent_Work) ->
     Leftover_Work = lists:concat([Work || {_, Work} <- Sent_Work]),
-    {Result, Leftover_Work};
-get_node_results([Node_Proc|Node_Procs], Result, Sent_Work) ->
+    {Result, Leftover_Work, All_Node_Procs};
+get_node_results([Node_Proc|Node_Procs], All_Node_Procs, Result, Sent_Work) ->
     {Node_Name, Node_PID} = Node_Proc,
     receive 
         {request_work, Node_PID} -> Node_PID ! {no_more_work},
@@ -323,20 +323,22 @@ get_node_results([Node_Proc|Node_Procs], Result, Sent_Work) ->
                 {result, Node_PID, Work_Res} -> 
                     Result_Upd = lists:append(Work_Res, Result),
                     Sent_Work_Upd = lists:keydelete(Node_PID, 1, Sent_Work),
-                    get_node_results(Node_Procs, Result_Upd, Sent_Work_Upd);
+                    get_node_results(Node_Procs, All_Node_Procs, Result_Upd, Sent_Work_Upd);
                 {nodedown, Node_Name} -> 
-                    get_node_results(Node_Procs, Result, Sent_Work)
+                    All_Node_Procs_Upd = lists:keydelete(Node_Name, 1, All_Node_Procs),
+                    get_node_results(Node_Procs, All_Node_Procs_Upd, Result, Sent_Work)
             end;
         {nodedown, Node_Name} -> 
-            get_node_results(Node_Procs, Result, Sent_Work)
-    end. 
+            All_Node_Procs_Upd = lists:keydelete(Node_Name, 1, All_Node_Procs),
+            get_node_results(Node_Procs, All_Node_Procs_Upd, Result, Sent_Work)
+    end.
 
 spawn_node_worker_f(Node) ->
     Worker_Pool_Proc = self(),
-    spawn_link(Node,
+    spawn(Node,
             fun() ->
                 Node_Proc = self(),
-                Worker_Amount = erlang:system_info(schedulers), % One master thread and one thread left to os
+                Worker_Amount = erlang:system_info(schedulers),
                 Threads = [spawn_link(Node, fun() -> thread_worker_f(Node_Proc) end) 
                             || _ <- lists:seq(1, Worker_Amount)],
                 node_worker_f(passive, Worker_Pool_Proc, Threads, Threads, [])

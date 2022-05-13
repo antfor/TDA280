@@ -50,10 +50,3 @@ page_rank_dist_pool_f() ->
     Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
     map_reduce:map_reduce_dist_pool_f(fun map_dist/2, 32, fun reduce/2, 32, 
 			      [{Url,ok} || Url <- Urls]).
-
-page_rank_dist_pool_ok() ->
-    page_rank_dist_pool(),
-    ok.
-
-page_rank_dist_pool_bench() ->
-  timer:tc(?MODULE, page_rank_dist_pool_ok, []).
