@@ -45,6 +45,12 @@ page_rank_dist_pool() ->
     map_reduce:map_reduce_dist_pool(fun map_dist/2, 32, fun reduce/2, 32, 
 			      [{Url,ok} || Url <- Urls]).
 
+page_rank_dist_pool_f() ->
+    dets:open_file(web,[{file,"web.dat"}]),
+    Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
+    map_reduce:map_reduce_dist_pool_f(fun map_dist/2, 32, fun reduce/2, 32, 
+			      [{Url,ok} || Url <- Urls]).
+
 page_rank_dist_pool_ok() ->
     page_rank_dist_pool(),
     ok.
