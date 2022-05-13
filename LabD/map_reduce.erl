@@ -192,7 +192,7 @@ spawn_node_worker(Node) ->
     spawn_link(Node,
             fun() ->
                 Node_Proc = self(),
-                Worker_Amount = erlang:system_info(schedulers) - 2, % One master thread and one thread left to os
+                Worker_Amount = erlang:system_info(schedulers), % One master thread and one thread left to os
                 Threads = [spawn_link(Node, fun() -> thread_worker(Node_Proc) end) 
                             || _ <- lists:seq(1, Worker_Amount)],
                 node_worker(passive, Worker_Pool_Proc, Threads, Threads, [])
