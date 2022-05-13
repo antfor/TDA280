@@ -139,7 +139,7 @@ map_reduce_dist_pool(Map,M,Reduce,R,Input) ->
                             {J, KVs} <-Mapped,
                             I == J,
                             KV <- KVs] 
-                        || I <- lists:seq(1, R - 1)],
+                        || I <- lists:seq(0, R - 1)],
     Reduce_Work = [fun() -> reduce_dist(Reduce, Split) end || Split <- Reduce_Splits],
 
     Worker_Pool ! {do_work, Reduce_Work},
@@ -252,7 +252,7 @@ map_reduce_dist_pool_f(Map,M,Reduce,R,Input) ->
                             {J, KVs} <-Mapped,
                             I == J,
                             KV <- KVs] 
-                        || I <- lists:seq(1, R - 1)],
+                        || I <- lists:seq(0, R - 1)],
     Reduce_Work = [fun() -> reduce_dist(Reduce, Split) end || Split <- Reduce_Splits],
 
     Reduceds = execute_work(Worker_Pool, Reduce_Work),
